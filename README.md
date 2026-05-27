@@ -1,51 +1,83 @@
-# Pipeline de Datos - Telco Customer Churn
+# Pipeline DataOps - Telco Customer Churn (Cloud-Native)
 
-Pipeline DataOps de 4 etapas para preparar el dataset Telco Customer Churn (IBM Sample Data Set, 7.044 clientes) y dejarlo cargado en PostgreSQL listo para entrenar un modelo de prediccion de abandono.
+Pipeline DataOps **desacoplado** de 4 etapas para preparar el dataset Telco Customer Churn y dejarlo cargado en PostgreSQL listo para entrenar un modelo de predicción de abandono.
 
-**Asignatura:** ITY1101 Gestion de Datos para IA - Duoc UC
-**Evaluacion:** Parcial N°2
-**Integrantes:** Benjamin Heresmann, Diego Hernandez
+**Arquitectura cloud-native:** API REST en Railway + PostgreSQL gestionado en Supabase + CI/CD vía GitHub Actions. Cero monolito, cada componente despliega y escala independientemente.
 
----
-
-## Arquitectura
-
-Pipeline modular con 4 etapas secuenciales, orquestadas por `src/run_pipeline.py`:
-
-```
-CSV fuente
-    |
-    v
-[1. Ingesta]        --> data/raw/         (copia con sello temporal + log)
-    |
-    v
-[2. Limpieza]       --> data/clean/       (TotalCharges -> float, booleanos, features)
-    |
-    v
-[3. Validacion]     --> data/validated/   (pandera estructural + reglas semanticas)
-                    --> data/rejected/    (registros con motivo de rechazo)
-    |
-    v
-[4. Carga BD]       --> PostgreSQL        (tabla clientes + auditoria carga_logs)
-```
-
-Cada etapa es un script Python independiente que tambien puede correrse por separado, util para debugging y demos.
+**Asignatura:** ITY1101 Gestión de Datos para IA - Duoc UC
+**Evaluación:** Parcial N°2
+**Equipo:** Benjamín Heresmann, Diego Hernández (equipo de 2 autorizado por el docente)
 
 ---
 
-## Stack tecnico
+## Arquitectura desacoplada
 
-| Componente            | Tecnologia              | Justificacion |
-|-----------------------|-------------------------|---------------|
-| Lenguaje              | Python 3.11             | Enseñado en clases, ecosistema maduro para datos |
-| Manipulacion datos    | pandas 2.1              | Estandar de facto para CSV/tabular |
-| Validacion estructural| pandera 0.18            | Declarativo, integra con pandas, mensajes claros |
-| Validacion semantica  | Funciones Python puras  | Reglas de negocio simples e inspectables |
-| Base de datos         | PostgreSQL 15           | Relacional robusta, restricciones declarativas |
-| ORM / conexion        | SQLAlchemy + psycopg2   | Estandar para Postgres en Python |
-| Contenedorizacion     | Docker + docker-compose | Entorno reproducible, requisito de la rubrica |
-| Control de versiones  | Git + GitHub            | Trazabilidad y colaboracion |
-| Seguimiento proyecto  | Trello (kanban)         | Simple, suficiente para equipo de 2 |
+```
+┌────────────────┐         ┌──────────────────────┐         ┌────────────────────┐
+│  GitHub Repo   │ ──CI──► │   Railway            │ ──SQL──►│   Supabase         │
+│  - Pipeline    │  Push   │   - FastAPI (Docker) │  HTTPS  │   - PostgreSQL 15  │
+│  - Dockerfile  │ ──CD──► │   - 4 etapas pipeline│         │   - Storage CSVs   │
+│  - Actions     │  Auto   │   - /pipeline/run    │         │   - Dashboard SQL  │
+│                │         │   - /kpis /logs      │         │                    │
+└────────────────┘         └──────────────────────┘         └────────────────────┘
+                                       │
+                                       ▼
+                              HTTP REST publico
+                              (consumible por
+                              dashboards, scripts,
+                              workflows externos)
+```
+
+**Componentes desacoplados:**
+
+| Componente | Rol | Servicio | Justificación |
+|---|---|---|---|
+| **Capa de datos** | PostgreSQL + Storage | Supabase | Postgres gestionado, SSL out-of-the-box, UI de admin, tier gratis |
+| **Capa de procesamiento** | API REST con FastAPI | Railway | Deploy desde Dockerfile, $PORT dinámico, healthcheck nativo, tier gratis |
+| **CI/CD** | Tests + deploy auto | GitHub Actions | Validación en cada push, deploy automático al merge |
+| **Documentación API** | Swagger UI | FastAPI (built-in) | Endpoint `/docs` autogenerado, ideal para demo |
+
+Cada uno corre independiente. Si Railway cae, Supabase sigue. Si la API se escala horizontalmente, la BD no se duplica. **No es monolito.**
+
+---
+
+## Pipeline de 4 etapas (cada una un endpoint independiente)
+
+```
+CSV en Supabase Storage
+        │
+        ▼
+[POST /pipeline/ingest]    → data/raw/    (descarga + timestamp + log)
+        │
+        ▼
+[POST /pipeline/clean]     → data/clean/  (TotalCharges fix, booleanos, features)
+        │
+        ▼
+[POST /pipeline/validate]  → data/validated/  + data/rejected/
+        │
+        ▼
+[POST /pipeline/load]      → Supabase Postgres (tabla clientes + auditoría)
+
+[POST /pipeline/run]       → ejecuta las 4 en cadena con KPIs
+```
+
+---
+
+## Stack técnico
+
+| Componente | Tecnología | Versión |
+|---|---|---|
+| Lenguaje | Python | 3.11 |
+| Framework API | FastAPI + Uvicorn | 0.110 / 0.27 |
+| Manipulación datos | pandas | 2.1 |
+| Validación estructural | pandera | 0.20+ |
+| ORM / DB driver | SQLAlchemy + psycopg2 | 2.0 / 2.9 |
+| Cliente Supabase | supabase-py | 2.4 |
+| Containerización | Docker | latest |
+| BD gestionada | PostgreSQL (Supabase) | 15 |
+| Host backend | Railway | - |
+| CI/CD | GitHub Actions | v4 |
+| Seguimiento proyecto | Trello | - |
 
 ---
 
@@ -53,207 +85,185 @@ Cada etapa es un script Python independiente que tambien puede correrse por sepa
 
 ```
 telco-churn-pipeline/
-├── README.md
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── .env.example
-├── .gitignore
+├── README.md                       Esta guia
+├── Dockerfile                      Imagen para Railway (sirve FastAPI)
+├── railway.toml                    Config de Railway (build + deploy + health)
+├── Procfile                        Comando alternativo (Heroku-style)
+├── requirements.txt                Dependencias Python
+├── .env.example                    Plantilla de variables (Supabase + Railway)
+├── .gitignore                      Excluye datos, logs, credenciales, venv
+├── .github/workflows/ci.yml        Tests automaticos en push
 ├── data/
-│   ├── raw/            # CSV ingestado con timestamp
-│   ├── clean/          # Despues de limpieza/transformacion
-│   ├── validated/      # Aprobado por validaciones
-│   └── rejected/       # Falló alguna validacion (con motivo)
+│   ├── raw/                        CSV descargado de Supabase Storage
+│   ├── clean/                      Post-limpieza
+│   ├── validated/                  Post-validacion (van a BD)
+│   └── rejected/                   Fallaron validacion (con motivo)
 ├── src/
-│   ├── ingesta.py      # Etapa 1
-│   ├── limpieza.py     # Etapa 2
-│   ├── validacion.py   # Etapa 3
-│   ├── carga_bd.py     # Etapa 4
-│   ├── run_pipeline.py # Orquestador
+│   ├── api.py                      ★ FastAPI - endpoints de cada etapa
+│   ├── ingesta.py                  Etapa 1 (desde Supabase Storage o local)
+│   ├── limpieza.py                 Etapa 2
+│   ├── validacion.py               Etapa 3
+│   ├── carga_bd.py                 Etapa 4 (Supabase Postgres con SSL)
+│   ├── run_pipeline.py             Orquestador CLI standalone
 │   └── utils/
-│       ├── logger.py   # Logging unificado
-│       └── schema.py   # Esquema pandera + reglas semanticas
+│       ├── logger.py               Logger centralizado
+│       ├── schema.py               Schema pandera + reglas semanticas
+│       └── supabase_client.py      Cliente para Storage
 ├── sql/
-│   └── 01_create_tables.sql  # DDL Postgres
-├── logs/               # Archivos .log por dia de ejecucion
+│   └── 01_create_tables.sql        DDL Postgres (ejecutar en Supabase SQL Editor)
+├── scripts/
+│   └── inyectar_errores.py         Genera dataset roto para demo en vivo
 ├── tests/
-│   └── test_validaciones.py
+│   └── test_validaciones.py        Tests unitarios (corren en GitHub Actions)
 └── docs/
-    ├── informe_tecnico.pdf
-    ├── presentacion.pdf
-    ├── arquitectura.png
-    └── flujo_datos.png
+    ├── informe_tecnico.md          Informe academico
+    ├── diagramas.md                Mermaid renders
+    ├── presentacion.md             Guion de slides
+    └── DEPLOY.md                   Guia paso-a-paso de deploy cloud
 ```
 
 ---
 
-## Requisitos
+## Setup inicial - Guía paso a paso
 
-- Docker Desktop instalado (incluye docker-compose v2)
-- Git
-- (Opcional para desarrollo local sin Docker) Python 3.11
+### 1. Configurar Supabase (5 min)
 
----
+1. Crear cuenta gratis en https://supabase.com → "New project"
+2. Elegir nombre (ej `telco-churn-data`), generar password, elegir región más cercana
+3. Cuando esté listo (~2 min), ir a **SQL Editor** → "New query"
+4. Copiar y pegar el contenido de [`sql/01_create_tables.sql`](sql/01_create_tables.sql) → "Run"
+5. Verificar en **Table Editor** que aparecen `clientes`, `carga_logs`, `clientes_rechazados`
+6. Ir a **Storage** → "New bucket" → nombre `telco-data`, hacerlo público
+7. Subir el CSV fuente al bucket como `telco_churn_source.csv`
+8. Ir a **Settings → Database** → copiar el **Connection string** (formato URI, modo Transaction)
+9. Ir a **Settings → API** → copiar `URL` y `anon public` key
 
-## Como levantar el proyecto
+### 2. Configurar Railway (5 min)
 
-### Opcion A - Todo con Docker (recomendado para demo)
-
-1. Clonar el repositorio:
-   ```bash
-   git clone <url-del-repo>
-   cd telco-churn-pipeline
+1. Ir a https://railway.app → "Login with GitHub"
+2. "New Project" → "Deploy from GitHub repo" → seleccionar este repo
+3. Railway detectará el Dockerfile y empezará a buildear
+4. Ir a "Variables" del servicio y agregar:
    ```
-
-2. Copiar `.env.example` a `.env` y ajustar credenciales:
-   ```bash
-   cp .env.example .env
+   DATABASE_URL=<connection string de Supabase paso 1.8>
+   SUPABASE_URL=<URL de Supabase paso 1.9>
+   SUPABASE_KEY=<anon key de Supabase paso 1.9>
+   SUPABASE_BUCKET=telco-data
+   SOURCE_CSV_FILENAME=telco_churn_source.csv
+   LOG_LEVEL=INFO
+   CORS_ORIGINS=*
    ```
+5. En "Settings" → "Networking" → "Generate Domain" para obtener URL pública
+6. Esperar primer deploy (~2 min) y verificar con `curl <tu-url>/health`
 
-3. Levantar PostgreSQL (la primera vez creara las tablas con el DDL):
-   ```bash
-   docker compose up -d postgres
-   ```
+### 3. Activar GitHub Actions (1 min)
 
-4. Esperar a que el healthcheck pase y ejecutar el pipeline:
-   ```bash
-   docker compose run --rm pipeline
-   ```
+El workflow `.github/workflows/ci.yml` ya está incluido. Solo asegurarse de que en GitHub Settings → Actions → "Allow all actions and reusable workflows" esté activo. Cada push correrá los tests automáticamente.
 
-5. Inspeccionar resultados:
-   ```bash
-   docker compose exec postgres psql -U pipeline_user -d telco_churn \
-     -c "SELECT churn, COUNT(*) FROM clientes GROUP BY churn;"
-
-   docker compose exec postgres psql -U pipeline_user -d telco_churn \
-     -c "SELECT * FROM carga_logs ORDER BY fecha_ejecucion DESC LIMIT 5;"
-   ```
-
-### Opcion B - Pipeline local, Postgres en Docker
-
-1. Levantar solo Postgres:
-   ```bash
-   docker compose up -d postgres
-   ```
-
-2. Instalar dependencias Python:
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate    # Windows
-   pip install -r requirements.txt
-   ```
-
-3. Ejecutar el pipeline completo:
-   ```bash
-   python src/run_pipeline.py
-   ```
-
-4. O ejecutar etapas individuales:
-   ```bash
-   python src/ingesta.py
-   python src/limpieza.py
-   python src/validacion.py
-   python src/carga_bd.py
-   ```
-
----
-
-## Ejecutar tests
+### 4. Probar la API en producción
 
 ```bash
+# Health check
+curl https://<tu-app>.up.railway.app/health
+
+# Documentacion Swagger UI
+# Abrir en navegador: https://<tu-app>.up.railway.app/docs
+
+# Ejecutar pipeline completo
+curl -X POST https://<tu-app>.up.railway.app/pipeline/run
+
+# Ver KPIs
+curl https://<tu-app>.up.railway.app/kpis/resumen | python -m json.tool
+
+# Ver ultimos logs
+curl https://<tu-app>.up.railway.app/logs/last?lineas=20
+```
+
+---
+
+## Desarrollo local (opcional)
+
+Si quieres iterar antes de hacer push:
+
+```bash
+# Setup
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+pip install -r requirements.txt
+
+# Copiar .env.example a .env y completar con tus credenciales Supabase
+cp .env.example .env
+
+# Levantar API
+uvicorn src.api:app --reload --port 8000
+
+# En otro terminal, probar
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/pipeline/run
+
+# Tests
 pytest tests/ -v
 ```
 
-Los tests cubren las reglas de validacion semantica (cruzadas entre `InternetService`, `PhoneService` y sus servicios derivados).
+---
+
+## Endpoints de la API
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| GET | `/` | Información de la API |
+| GET | `/health` | Health check + estado de BD |
+| GET | `/docs` | Swagger UI auto-generado |
+| POST | `/pipeline/ingest` | Solo etapa 1 |
+| POST | `/pipeline/clean` | Solo etapa 2 |
+| POST | `/pipeline/validate` | Solo etapa 3 |
+| POST | `/pipeline/load` | Solo etapa 4 |
+| POST | `/pipeline/run` | Ejecuta las 4 en orden |
+| GET | `/kpis/last?limit=10` | Últimas N ejecuciones |
+| GET | `/kpis/resumen` | KPIs agregados |
+| GET | `/logs/last?lineas=50` | Últimas N líneas del log de hoy |
+| GET | `/rechazados?limit=20` | Últimos N rechazados con motivo |
 
 ---
 
-## Etapas del pipeline en detalle
+## Demo en vivo (guion)
 
-### 1. Ingesta (`src/ingesta.py`)
-- Lee el CSV fuente desde la ruta definida en `SOURCE_CSV_PATH`.
-- Copia el archivo a `data/raw/telco_churn_raw_YYYYMMDD_HHMMSS.csv`.
-- Registra en log: archivo origen, filas leidas, columnas, timestamp.
-
-### 2. Limpieza y transformacion (`src/limpieza.py`)
-- Detecta y convierte `TotalCharges` (string con celdas vacias) a float con NaN.
-- Normaliza columnas Yes/No a booleano: `Partner`, `Dependents`, `PhoneService`, `PaperlessBilling`, `Churn`.
-- Elimina duplicados por `customerID`.
-- Crea feature derivada `tenure_group`: 0-12, 13-24, 25-48, 49-72, 73+ meses.
-- Guarda en `data/clean/`.
-
-### 3. Validacion estructural y semantica (`src/validacion.py`)
-- **Estructural (pandera):** tipos por columna, rangos numericos, valores permitidos en categoricas, formato de `customerID` (`####-AAAAA`).
-- **Semantica (reglas if/else):**
-  - Si `InternetService = No`, todos los servicios derivados deben ser `No internet service`.
-  - Si `InternetService != No`, ningun servicio puede ser `No internet service`.
-  - Si `PhoneService = False`, `MultipleLines` debe ser `No phone service` (y vice-versa).
-  - Coherencia `TotalCharges` con `MonthlyCharges * tenure`.
-- Filas validas -> `data/validated/`. Filas invalidas -> `data/rejected/` con motivo.
-
-### 4. Carga a PostgreSQL (`src/carga_bd.py`)
-- Conecta a Postgres con SQLAlchemy + psycopg2.
-- Inserta validados en `clientes` dentro de una transaccion (rollback si falla).
-- Audita rechazados en `clientes_rechazados` con payload JSONB y motivo.
-- Registra ejecucion en `carga_logs`: archivo, conteos, duracion, estado.
+1. **Mostrar el repo en GitHub** — código versionado, Actions corriendo verde
+2. **Mostrar Railway** — deploy exitoso, logs en vivo
+3. **Mostrar Supabase** — Table Editor con las 3 tablas vacías
+4. **Abrir el Swagger** (`/docs`) — todos los endpoints visibles y testeables
+5. **Disparar `/pipeline/run`** desde el Swagger UI
+6. **Volver a Supabase** → Table Editor → mostrar las 7.032 filas en `clientes`
+7. **Mostrar `carga_logs`** — auditoría de la ejecución
+8. **Disparar `/pipeline/ingest` con el dataset roto** (`scripts/inyectar_errores.py`)
+9. **Mostrar `clientes_rechazados`** — 8 errores detectados con motivo
+10. **Mostrar `/kpis/resumen`** — métricas agregadas
 
 ---
 
-## KPIs de monitoreo
+## Seguridad y reproducibilidad
 
-Cada ejecucion del orquestador imprime y persiste:
+- **Variables sensibles** en Railway Variables (nunca en código).
+- **Conexión a Supabase forzada con SSL** (`sslmode=require`).
+- **CORS configurable** vía `CORS_ORIGINS`.
+- **GitHub Actions** valida en cada push que el código compila y los tests pasan.
+- **Dockerfile reproducible**: pin de versiones, no `latest`.
+- **Logs estructurados** sin datos personales.
 
-| KPI                          | Donde se mide |
-|------------------------------|--------------------------|
-| Latencia por etapa (seg)     | Logs + tabla carga_logs  |
-| Registros leidos             | Logs + tabla carga_logs  |
-| Registros insertados         | Logs + tabla carga_logs  |
-| Registros rechazados         | Logs + tabla carga_logs  |
-| % de validez                 | Calculado en validacion  |
-| Completitud por columna      | Calculado en limpieza    |
-| Estado de ejecucion          | OK / ERROR / PARCIAL     |
+Ver detalle del plan de seguridad en [`docs/informe_tecnico.md`](docs/informe_tecnico.md) sección 5.
 
 ---
 
-## Plan de seguridad DataOps
+## Continuidad con Evaluación 3
 
-1. **Ley 19.628 (Chile)** - el dataset contiene datos personales (ID cliente, edad, situacion familiar, datos financieros). Tratamiento limitado al proposito declarado.
-2. **Cifrado en transito** - conexion a Postgres via TLS en produccion.
-3. **Cifrado en reposo** - volumenes Docker con cifrado a nivel sistema operativo en produccion.
-4. **Control de acceso** - rol `telco_analista` con `SELECT` sobre `clientes` y sin `INSERT/UPDATE/DELETE` (ejemplo comentado en `sql/01_create_tables.sql`).
-5. **Credenciales** - variables de entorno (`.env`), nunca en codigo o git.
-6. **Logs sin PII** - los logs registran conteos y tipos de error, no valores de columnas sensibles.
-7. **Auditoria** - tabla `carga_logs` mantiene historial completo de ejecuciones.
-8. **Enmascaramiento** - `customerID` puede hashearse antes de exponer a analitica si se requiere mayor proteccion.
-
----
-
-## Flujo end-to-end con datos del caso
-
-Salida esperada al correr `python src/run_pipeline.py`:
-
-```
-INFO | orquestador | INICIO PIPELINE TELCO CHURN
-INFO | ingesta     | Iniciando ingesta desde .../02_Base_...csv
-INFO | ingesta     | Ingesta completada | filas=7043 | columnas=21
-INFO | limpieza    | TotalCharges: 11 celdas vacias convertidas a NaN
-INFO | limpieza    | Limpieza completada | filas=7043 -> 7043 | nulos=11 | duplicados=0
-INFO | validacion  | Validacion estructural: 7032 ok, 11 rechazados
-INFO | validacion  | Validacion semantica:  7032 ok, 0 rechazados
-INFO | carga_bd    | Insertados 7032 registros en clientes
-INFO | orquestador | FIN PIPELINE | duracion total = ~3 seg
-```
-
----
-
-## Continuidad con Evaluacion 3
-
-El dataset cargado en `clientes` queda listo para entrenar un modelo de clasificacion binaria sobre el target `churn`. Variables candidatas: `tenure`, `Contract`, `MonthlyCharges`, `InternetService`, `PaymentMethod`.
+La tabla `clientes` queda lista para entrenar un modelo de clasificación binaria sobre `churn`. Variables candidatas: `tenure`, `contract`, `monthly_charges`, `internet_service`, `payment_method`. La API puede extenderse con un endpoint `/model/train` y `/model/predict` reutilizando la misma infraestructura cloud.
 
 ---
 
 ## Referencias
 
 - Dataset: IBM Sample Data Sets - Telco Customer Churn (Kaggle)
-- Material de clases: PDF 2.1 a 2.4 del modulo Pipeline de Datos
-- Rubrica: Evaluacion Parcial N°2, ITY1101 Gestion de Datos para IA
+- Material del curso: PDFs 2.1 a 2.4 - Pipeline de Datos
+- Supabase docs: https://supabase.com/docs
+- Railway docs: https://docs.railway.app
+- FastAPI docs: https://fastapi.tiangolo.com

@@ -82,19 +82,34 @@
 
 ---
 
-## Slide 7 — Arquitectura del pipeline (1.5 min)
+## Slide 7 — Arquitectura cloud DESACOPLADA (2 min)
+**Quién habla:** Benjamín
+
+**Tres servicios independientes (NO monolito):**
+- **GitHub** = repositorio + CI/CD (GitHub Actions)
+- **Railway** = capa de cómputo (FastAPI + Docker, URL pública)
+- **Supabase** = capa de datos (Postgres + Storage)
+
+**Visual:** captura del diagrama 1 de `docs/diagramas.md` (arquitectura cloud)
+
+**Qué decir:** A petición del docente, la solución no es monolito. Cada servicio escala, despliega y se mantiene independiente. Si Railway cae, la BD sigue accesible. Si crece el tráfico, escalamos sólo la API sin tocar la BD. Si cambiamos Supabase por AWS RDS mañana, sólo se actualiza la connection string.
+
+---
+
+## Slide 7b — Arquitectura interna del pipeline (1 min)
 **Quién habla:** Benjamín
 
 - Pipeline Modular Lineal con 4 etapas:
-  1. Ingesta → `data/raw/`
+  1. Ingesta → `data/raw/` (desde Supabase Storage)
   2. Limpieza/Transformación → `data/clean/`
   3. Validación → `data/validated/` + `data/rejected/`
-  4. Carga → PostgreSQL
+  4. Carga → Supabase PostgreSQL
+- Capa de exposición: FastAPI con endpoint por etapa + orquestador
 - Capas transversales: logger, variables de entorno, KPIs
 
-**Visual:** captura del diagrama 1 de `docs/diagramas.md` (arquitectura)
+**Visual:** diagrama 1.b de `docs/diagramas.md` (pipeline interno)
 
-**Qué decir:** Cada etapa es independiente, ejecutable por separado y con responsabilidad acotada. Si una falla, las anteriores ya dejaron su salida en disco y el operador puede retomar desde ahí.
+**Qué decir:** Cada etapa es independiente, ejecutable por separado vía endpoint REST. Si una falla, las anteriores ya dejaron su salida persistida y el operador puede retomar desde el endpoint específico.
 
 ---
 
@@ -183,44 +198,49 @@ Persistencia: tabla `carga_logs`. Alertas vía log `WARNING`. Próximo paso: das
 
 ---
 
-## Slides 14-18 — DEMO EN VIVO (5 min)
+## Slides 14-18 — DEMO EN VIVO CLOUD (5 min)
 **Quién habla:** alternancia
 
 **Setup previo:**
-- Terminal abierto en la raíz del proyecto
-- Docker Desktop corriendo (si se usa Docker)
-- Postgres ya levantado (`docker compose up -d postgres`)
-- Carpeta `data/raw/` vacía para que se vea la magia
+- Navegador con 3 pestañas abiertas:
+  1. GitHub repo del proyecto
+  2. Railway dashboard del servicio
+  3. Supabase dashboard (Table Editor + Storage)
+- Terminal abierto con `curl` o Postman para llamar la API
+- URL pública de Railway lista para copiar
 
 **Guion de la demo:**
 
-### Demo paso 1 (1 min) — "Ejecutamos el pipeline completo"
-```bash
-.venv\Scripts\activate
-python src/run_pipeline.py
-```
-- Mostrar los logs corriendo en orden
-- Resaltar: "FIN PIPELINE | duracion = X seg"
+### Demo paso 1 (1 min) — "Mostremos el deploy en producción"
+- Tab GitHub: mostrar último commit + badge verde de Actions ("tests passed")
+- Tab Railway: mostrar "Active deployment" con logs en vivo
+- Tab Supabase: mostrar Table Editor con las 3 tablas vacías
 
-### Demo paso 2 (1 min) — "Veamos los datos en la BD"
-```bash
-docker compose exec postgres psql -U pipeline_user -d telco_churn -c "SELECT churn, COUNT(*) FROM clientes GROUP BY churn;"
-docker compose exec postgres psql -U pipeline_user -d telco_churn -c "SELECT * FROM carga_logs ORDER BY fecha_ejecucion DESC LIMIT 3;"
-```
+### Demo paso 2 (1 min) — "API documentada y testeable"
+- Abrir `https://<tu-app>.up.railway.app/docs` → Swagger UI
+- Mostrar los 11 endpoints disponibles
+- Click en `GET /health` → "Try it out" → "Execute"
+- Mostrar respuesta `{"status": "healthy", "database": "ok"}`
 
-### Demo paso 3 (2 min) — "Y ahora veamos qué pasa con datos rotos"
-```bash
-python scripts/inyectar_errores.py
-# Editar src/run_pipeline.py o usar un script auxiliar para apuntar al dataset roto
-python -c "import sys; sys.path.insert(0,'src'); from limpieza import limpiar; from validacion import validar; from pathlib import Path; ruta_clean = limpiar(Path('data/raw/telco_churn_demo_con_errores.csv')); validar(ruta_clean)"
-```
-- Mostrar los logs `WARNING` detectando 5 errores estructurales + 3 semánticos
-- Abrir el archivo de rechazados y mostrar los motivos
+### Demo paso 3 (1.5 min) — "Ejecutamos el pipeline completo desde la nube"
+- En Swagger: `POST /pipeline/run` → "Execute"
+- Esperar ~10 seg → mostrar respuesta con 4 etapas OK
+- Tab Supabase → refresh Table Editor → mostrar 7.032 filas en `clientes`
+- Tab Supabase → tabla `carga_logs` → mostrar el registro de la ejecución
 
-### Demo paso 4 (1 min) — "Y los rechazos quedan auditados en BD"
+### Demo paso 4 (1.5 min) — "Detección de errores en vivo"
 ```bash
-docker compose exec postgres psql -U pipeline_user -d telco_churn -c "SELECT customer_id, motivo_rechazo, tipo_validacion FROM clientes_rechazados;"
+# Subir el CSV roto a Supabase Storage (desde la UI o curl)
+# O cambiar SOURCE_CSV_FILENAME temporalmente al dataset roto
+curl -X POST https://<tu-app>.up.railway.app/pipeline/run
 ```
+- Mostrar respuesta con 8 rechazos
+- Swagger: `GET /rechazados?limit=10` → mostrar los motivos
+- Tab Supabase → tabla `clientes_rechazados` → mostrar los 8 con tipo (estructural/semántica)
+
+### Demo paso 5 (cierre, 30 seg) — "Trazabilidad completa"
+- Swagger: `GET /kpis/resumen` → mostrar agregados
+- Mencionar: "todo esto está accesible 24/7 vía URL pública, sin necesidad de levantar nada local"
 
 ---
 

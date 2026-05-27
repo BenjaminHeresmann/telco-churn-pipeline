@@ -57,14 +57,33 @@ MAPEO_COLUMNAS = {
 
 
 def _build_engine() -> Engine:
+    """Construye el engine SQLAlchemy.
+
+    Prioriza DATABASE_URL (recomendado para Supabase y Railway).
+    Si no esta seteado, ensambla la URL desde variables individuales.
+    Fuerza sslmode=require para conexiones a Supabase.
+    """
     load_dotenv(PROJECT_ROOT / ".env")
-    user = os.getenv("POSTGRES_USER", "pipeline_user")
-    pwd = os.getenv("POSTGRES_PASSWORD", "cambiar_en_produccion")
+
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        if database_url.startswith("postgresql://"):
+            database_url = database_url.replace(
+                "postgresql://", "postgresql+psycopg2://", 1
+            )
+        return create_engine(database_url, future=True, pool_pre_ping=True)
+
+    user = os.getenv("POSTGRES_USER", "postgres")
+    pwd = os.getenv("POSTGRES_PASSWORD", "")
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
-    db = os.getenv("POSTGRES_DB", "telco_churn")
-    url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
-    return create_engine(url, future=True)
+    db = os.getenv("POSTGRES_DB", "postgres")
+    sslmode = os.getenv("POSTGRES_SSLMODE", "require")
+    url = (
+        f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
+        f"?sslmode={sslmode}"
+    )
+    return create_engine(url, future=True, pool_pre_ping=True)
 
 
 def _ultimo_validado() -> Path:

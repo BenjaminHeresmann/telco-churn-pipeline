@@ -32,7 +32,9 @@ Este informe documenta el diseño, planificación e implementación de un pipeli
 
 El valor para la organización es doble. Por una parte, el pipeline reduce el costo operativo de preparación de datos al automatizar las etapas que tradicionalmente se hacen manualmente con planillas, eliminando errores humanos y aumentando la frecuencia con que el negocio puede recalibrar su estrategia de retención. Por otra parte, sienta las bases para la Evaluación 3, en la que se entrenará un modelo de clasificación binaria sobre la variable Churn, permitiendo focalizar campañas de retención sobre los clientes con mayor probabilidad de abandono y, en consecuencia, proteger los ingresos recurrentes de la compañía.
 
-La solución se implementa con Python 3.11, pandas y pandera para procesamiento y validación, PostgreSQL 15 como repositorio relacional, Docker y docker-compose para portabilidad del entorno, y Git/GitHub para control de versiones. La arquitectura es un Pipeline Modular Lineal en el que cada etapa es un script independiente con responsabilidad acotada, orquestado por un script central que registra KPIs en cada paso.
+La solución se implementa con una **arquitectura cloud-native desacoplada**: el procesamiento corre como API REST en FastAPI desplegada en **Railway** (capa de cómputo), la persistencia usa PostgreSQL gestionado en **Supabase** (capa de datos), los archivos crudos viven en Supabase Storage, y el código se versiona en GitHub con CI/CD automatizado vía GitHub Actions. No es un monolito: cada componente escala, despliega y se mantiene de forma independiente, comunicándose mediante interfaces estándar (HTTPS REST y SQL sobre TLS).
+
+El equipo está autorizado por el docente a operar con **dos integrantes** (Benjamín Heresmann y Diego Hernández), con división equitativa de responsabilidades técnicas pero defensa individual de la solución completa.
 
 ---
 
@@ -83,18 +85,106 @@ Ver `docs/diagramas.md` — diagrama 5 (renderizado con Mermaid).
 
 ---
 
+## 4. Arquitectura cloud desacoplada
+
+A pedido del docente, la solución NO es un monolito y debe quedar desplegada en la nube. Se diseña una arquitectura de tres servicios independientes que se comunican mediante interfaces estándar.
+
+### 4.0.1 Servicios
+
+| Servicio | Tecnología | Rol | Justificación |
+|---|---|---|---|
+| **Capa de datos** | Supabase (PostgreSQL 15 + Storage) | Almacena el CSV crudo y los datos curados | PostgreSQL gestionado con SSL out-of-the-box, UI web para inspección, Storage S3-compatible, plan gratis suficiente para el alcance académico |
+| **Capa de cómputo** | Railway (Docker + FastAPI) | Ejecuta el pipeline expuesto como API REST | Deploy directo desde Dockerfile, puerto dinámico, healthchecks nativos, escalado horizontal, plan gratis |
+| **CI/CD** | GitHub Actions | Valida y promueve cambios | Tests automáticos en cada push; integración nativa con GitHub |
+
+### 4.0.2 Por qué no monolito
+
+Una arquitectura monolítica habría empaquetado todo (BD + pipeline + UI) en un único contenedor. Eso:
+
+- Acopla el ciclo de vida de los datos al ciclo de vida del código (no puedes hacer rolling deploy del pipeline sin downtime de BD).
+- Impide escalar de forma diferenciada (la BD necesita storage; el pipeline necesita CPU para procesamiento).
+- Dificulta la sustitución de componentes (si mañana cambian Supabase por AWS RDS, sólo se actualiza la connection string).
+- Concentra el blast radius de un fallo: si la BD se corrompe, el contenedor entero queda inutilizable.
+
+Con desacoplamiento, cada servicio puede:
+
+- Actualizarse, escalarse y reiniciarse independientemente.
+- Tener métricas y alertas separadas.
+- Reemplazarse por una alternativa equivalente sin tocar a los demás (siempre que respeten el contrato API/SQL).
+
+### 4.0.3 Endpoints REST expuestos
+
+La capa de cómputo es una API FastAPI con los siguientes endpoints (autodocumentados en `/docs` vía Swagger UI):
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| GET | `/` | Información de la API |
+| GET | `/health` | Estado del servicio y de la BD |
+| GET | `/docs` | Swagger UI interactivo (autogenerado) |
+| POST | `/pipeline/ingest` | Ejecuta solo etapa 1 (ingesta desde Supabase Storage) |
+| POST | `/pipeline/clean` | Ejecuta solo etapa 2 (limpieza) |
+| POST | `/pipeline/validate` | Ejecuta solo etapa 3 (validación) |
+| POST | `/pipeline/load` | Ejecuta solo etapa 4 (carga a Supabase BD) |
+| POST | `/pipeline/run` | Ejecuta las 4 etapas en orden con KPIs |
+| GET | `/kpis/last?limit=N` | Últimas N ejecuciones desde `carga_logs` |
+| GET | `/kpis/resumen` | KPIs agregados (totales, promedios, tasas) |
+| GET | `/logs/last?lineas=N` | Últimas N líneas del log de hoy |
+| GET | `/rechazados?limit=N` | Últimos N registros rechazados con motivo |
+
+Esta granularidad permite que sistemas externos (un job de Airflow, un script en cron, un dashboard web) consuman partes específicas del pipeline sin tener que importarlo como librería.
+
+### 4.0.4 Flujo de despliegue continuo
+
+```
+Desarrollador hace git push a main
+         │
+         ▼
+GitHub Actions corre pytest (tests/)
+         │
+         ▼ (si OK)
+Railway detecta cambio en main (webhook automático)
+         │
+         ▼
+Railway rebuilda el Docker image desde Dockerfile
+         │
+         ▼
+Railway hace rolling deploy (sin downtime)
+         │
+         ▼
+Healthcheck en /health verifica que está operativo
+         │
+         ▼
+Tráfico se enruta al nuevo deploy
+```
+
+Tiempo total desde push hasta producción: ~3-5 minutos.
+
+### 4.0.5 Variables de entorno (Railway)
+
+Toda la configuración sensible se inyecta como variables de entorno en Railway (nunca en código):
+
+- `DATABASE_URL` — connection string completo de Supabase (con SSL)
+- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_BUCKET` — para descargar el CSV desde Storage
+- `SOURCE_CSV_FILENAME` — nombre del archivo en el bucket
+- `LOG_LEVEL` — granularidad de logging
+- `CORS_ORIGINS` — orígenes permitidos para CORS (frontend opcional)
+- `PORT` — inyectado por Railway automáticamente
+
+---
+
 ## 4. Explicación técnica del pipeline
 
 ### 4.1 Etapa 1 — Ingesta automatizada
 
-**Objetivo:** capturar el CSV fuente y depositarlo en una zona controlada (`data/raw/`) con trazabilidad temporal, sin transformar el contenido.
+**Objetivo:** capturar el CSV fuente desde **Supabase Storage** y depositarlo en una zona controlada (`data/raw/`) con trazabilidad temporal, sin transformar el contenido.
 
-**Implementación:** script `src/ingesta.py` que lee la ruta del CSV fuente desde la variable de entorno `SOURCE_CSV_PATH`, copia el archivo con un sufijo de timestamp (`telco_churn_raw_YYYYMMDD_HHMMSS.csv`) y registra en el log el número de filas, columnas y la ruta destino. La copia preserva el archivo original intacto, requisito básico de DataOps.
+**Implementación:** script `src/ingesta.py` que descarga el CSV desde el bucket `telco-data` de Supabase Storage usando la librería `supabase-py`, lo deposita en `data/raw/` con un sufijo de timestamp (`telco_churn_raw_YYYYMMDD_HHMMSS.csv`), y registra en el log el número de filas, columnas y la ruta destino. La estrategia de fuentes tiene tres niveles de prioridad: (1) parámetro explícito si se pasa, (2) Supabase Storage si están seteadas `SUPABASE_URL` y `SUPABASE_KEY`, (3) archivo local fallback si está `SOURCE_CSV_PATH`. Esto permite que el mismo código corra en cloud y en desarrollo local sin modificaciones.
 
 **Decisiones técnicas y alternativas evaluadas:**
 
 - *Tipo de ingesta elegido:* **por lotes (batch)**. El dataset es un CSV estático, por lo que streaming/Kafka serían sobreingeniería injustificada.
-- *Alternativa descartada — ingesta vía API:* el caso no expone API, y un wrapper artificial sólo agregaría latencia. Si en el futuro la compañía expone un endpoint para extraer churn desde su CRM, basta con sustituir esta etapa.
+- *Por qué Supabase Storage y no FTP/S3:* Supabase Storage es S3-compatible bajo el capó, ya viene incluido en la suscripción gratuita y se administra desde la misma UI que la BD. Reduce la cantidad de servicios a gestionar.
+- *Alternativa descartada — ingesta vía API REST:* el caso no expone API de la compañía, y un wrapper artificial sólo agregaría latencia. Si en el futuro la compañía expone un endpoint para extraer churn desde su CRM, basta con sustituir esta etapa.
 - *Trazabilidad:* el sufijo de timestamp permite mantener histórico de cargas y reproducibilidad. El logger escribe simultáneamente a consola (para demo) y a archivo (para auditoría).
 
 **Manejo de anomalías:**
@@ -156,11 +246,11 @@ Ver `docs/diagramas.md` — diagrama 5 (renderizado con Mermaid).
 
 ### 4.4 Etapa 4 — Carga a base de datos
 
-**Objetivo:** persistir los registros validados en PostgreSQL respetando integridad referencial, dentro de transacciones que permitan rollback ante fallos.
+**Objetivo:** persistir los registros validados en **Supabase PostgreSQL** respetando integridad referencial, dentro de transacciones que permitan rollback ante fallos, con conexión cifrada vía SSL.
 
 **Implementación:** script `src/carga_bd.py` que:
 
-1. Construye la conexión con SQLAlchemy + psycopg2 a partir de las variables de entorno (`POSTGRES_HOST`, `POSTGRES_USER`, etc.).
+1. Construye la conexión con SQLAlchemy + psycopg2 a partir del `DATABASE_URL` que entrega Supabase, o ensambla la URL desde variables individuales forzando `sslmode=require`.
 2. Renombra las columnas del DataFrame al `snake_case` esperado por la tabla `clientes`.
 3. Inserta los registros en bloques de 500 (`chunksize=500`) usando `to_sql` con `method="multi"` para optimizar throughput.
 4. Toda la inserción ocurre dentro de un `engine.begin()` que garantiza COMMIT/ROLLBACK atómico.
@@ -169,7 +259,8 @@ Ver `docs/diagramas.md` — diagrama 5 (renderizado con Mermaid).
 
 **Decisiones técnicas y alternativas evaluadas:**
 
-- *Por qué PostgreSQL y no SQL Server o MySQL:* el material del curso lo menciona explícitamente y su comando `COPY` es referente para cargas eficientes. Para producción en Chile, también es la opción más común en stack moderno.
+- *Por qué Supabase y no AWS RDS, Azure Database o auto-hosted:* Supabase ofrece PostgreSQL gestionado con interfaz web amigable (Table Editor, SQL Editor), tiene plan gratuito generoso para proyectos académicos (500MB de BD + 1GB de Storage), incluye Storage S3-compatible en el mismo servicio (evita gestionar AWS S3 aparte) y soporta SSL nativo sin configuración adicional. La connection string viene lista para producción.
+- *Por qué pooler en puerto 6543 y no conexión directa en 5432:* el pooler de Supabase (PgBouncer en modo Transaction) maneja conexiones de servicios serverless de manera más eficiente, evitando agotar las ~60 conexiones simultáneas que permite el tier gratis. Railway al ser un servicio cloud puede crear y destruir conexiones rápidamente.
 - *Por qué SQLAlchemy y no psycopg2 directo:* SQLAlchemy ofrece abstracción sobre dialectos (facilita migrar a otro motor si se requiere) y un manejo transaccional más limpio. Para cargas de millones de filas se evaluaría usar `COPY` directo, pero para 7.000 filas `to_sql(method="multi")` es suficientemente rápido (~1 segundo).
 - *Por qué un esquema único `clientes` y no normalizar:* el dataset es analítico (cada fila es un cliente con sus atributos planos), no transaccional. Una normalización 3FN sería sobreingeniería que dificultaría el join para el modelo de IA en Evaluación 3.
 - *Auditoría:* la tabla `carga_logs` es la fuente única de verdad sobre cuándo, qué y con qué éxito se ha ejecutado el pipeline. Soporta consultas como "muéstrame las ejecuciones que rechazaron más del 5% de registros en los últimos 7 días".

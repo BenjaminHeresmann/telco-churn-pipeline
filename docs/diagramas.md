@@ -4,16 +4,62 @@ Estos diagramas se renderizan en GitHub directamente (Mermaid nativo). Para expo
 
 ---
 
-## 1. Arquitectura del pipeline (vista por capas)
+## 1. Arquitectura cloud desacoplada (vista de servicios)
+
+```mermaid
+flowchart TB
+    DEV([Equipo de desarrollo]):::actor
+
+    subgraph GIT["GitHub"]
+        REPO[Repositorio<br/>telco-churn-pipeline]
+        ACT[GitHub Actions<br/>CI: tests + lint]
+    end
+
+    subgraph RAIL["Railway - Capa de procesamiento"]
+        API[FastAPI service<br/>Docker container<br/>endpoints REST]
+        DOCKER[Dockerfile<br/>uvicorn auto-start]
+    end
+
+    subgraph SUPA["Supabase - Capa de datos"]
+        STO[(Storage bucket<br/>telco-data<br/>CSVs fuente)]
+        DB[(PostgreSQL 15<br/>clientes<br/>carga_logs<br/>clientes_rechazados)]
+        UI[Dashboard Web<br/>SQL Editor + Table Editor]
+    end
+
+    CONSUMERS([Consumidores externos<br/>cron, scripts, dashboards,<br/>postman, swagger UI]):::actor
+
+    DEV -->|git push| REPO
+    REPO -->|webhook| ACT
+    ACT -->|tests OK| REPO
+    REPO -->|webhook deploy| RAIL
+    DOCKER --> API
+    API -->|descarga CSV<br/>HTTPS| STO
+    API -->|SQL con SSL<br/>port 6543| DB
+    DB --> UI
+    CONSUMERS -->|HTTP REST| API
+
+    classDef actor fill:#fff4e6,stroke:#d68910,stroke-width:2px
+    style REPO fill:#e7e7ff
+    style ACT fill:#e7e7ff
+    style API fill:#d4e6f1
+    style DOCKER fill:#d4e6f1
+    style STO fill:#d5f5e3
+    style DB fill:#d5f5e3
+    style UI fill:#d5f5e3
+```
+
+---
+
+## 1.b Arquitectura del pipeline (vista por etapas internas)
 
 ```mermaid
 flowchart TB
     subgraph EXT[" "]
-        SRC[CSV fuente<br/>Telco Customer Churn<br/>7044 filas - 21 columnas]
+        SRC[CSV fuente<br/>Supabase Storage<br/>telco_churn_source.csv]
     end
 
     subgraph ING["CAPA 1 - INGESTA"]
-        I[ingesta.py<br/>copia con timestamp]
+        I[ingesta.py<br/>descarga + timestamp]
         RAW[(data/raw/<br/>telco_churn_raw_*.csv)]
     end
 
@@ -30,20 +76,28 @@ flowchart TB
     end
 
     subgraph LOAD["CAPA 4 - CARGA"]
-        C[carga_bd.py<br/>SQLAlchemy + psycopg2<br/>transaccional]
-        DB[(PostgreSQL<br/>tabla clientes<br/>tabla carga_logs<br/>tabla clientes_rechazados)]
+        C[carga_bd.py<br/>SQLAlchemy + psycopg2 + SSL]
+        DB[(Supabase Postgres<br/>tabla clientes<br/>tabla carga_logs<br/>tabla clientes_rechazados)]
+    end
+
+    subgraph API["CAPA DE EXPOSICION"]
+        APIE[FastAPI<br/>endpoints REST por etapa<br/>+ orquestador /pipeline/run]
     end
 
     subgraph TRANSV["CAPAS TRANSVERSALES"]
         LOG[Logger centralizado<br/>logs/pipeline_YYYYMMDD.log]
-        SEC[Variables de entorno<br/>.env]
-        KPI[KPIs por etapa<br/>latencia, validez, volumen]
+        SEC[Variables Railway<br/>DATABASE_URL, SUPABASE_*]
+        KPI[KPIs persistidos<br/>en carga_logs]
     end
 
     SRC --> I --> RAW --> L --> CLEAN --> V1 --> V2
     V2 --> VALID --> C --> DB
     V2 --> REJ
     REJ --> C
+    APIE --> I
+    APIE --> L
+    APIE --> V1
+    APIE --> C
 
     LOG -.-> I
     LOG -.-> L
@@ -59,6 +113,7 @@ flowchart TB
     style VALID fill:#e7ffe7
     style REJ fill:#ffe7e7
     style DB fill:#ffe7ff
+    style APIE fill:#d4e6f1
 ```
 
 ---
