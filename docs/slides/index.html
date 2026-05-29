@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Defensa Evaluación 2 — Pipeline DataOps Telco Churn</title>
+  <link rel="stylesheet" href="reveal/dist/reset.css">
+  <link rel="stylesheet" href="reveal/dist/reveal.css">
+  <link rel="stylesheet" href="reveal/plugin/highlight/monokai.css">
+  <style>
+    :root{
+      --azul:#1F4E79; --azul2:#2E75B6; --verde:#1e8449; --supa:#3ecf8e;
+      --gris:#5b6b7a; --bg:#ffffff; --soft:#f4f7fb; --line:#dbe4ee; --rojo:#c0392b;
+    }
+    .reveal{font-family:"Segoe UI",Arial,Helvetica,sans-serif;font-size:30px;color:#1c2733;}
+    .reveal .slides{text-align:left;}
+    .reveal h1,.reveal h2,.reveal h3{font-family:"Segoe UI",Arial,sans-serif;color:var(--azul);text-transform:none;font-weight:700;letter-spacing:0;}
+    .reveal h1{font-size:1.55em;line-height:1.1;}
+    .reveal h2{font-size:1.15em;margin-bottom:.35em;}
+    .reveal h3{font-size:.8em;color:var(--azul2);}
+    .reveal section{top:40px !important;}
+    .reveal p,.reveal li{line-height:1.32;}
+    .reveal ul{margin-left:1em;}
+    .reveal li{margin:.28em 0;}
+    .reveal strong{color:var(--azul);}
+    .reveal em{color:var(--gris);font-style:normal;}
+    .reveal small{font-size:.62em;color:var(--gris);}
+    code{font-family:Consolas,"Courier New",monospace;background:#eef2f7;color:#0b3d2e;padding:1px 7px;border-radius:5px;font-size:.85em;}
+    /* barra superior de cada slide */
+    .kicker{position:absolute;top:-8px;left:0;font-size:.5em;font-weight:700;letter-spacing:.12em;color:var(--azul2);text-transform:uppercase;}
+    .role{position:absolute;top:-8px;right:0;font-size:.42em;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--azul2);padding:4px 12px;border-radius:20px;text-transform:uppercase;}
+    .role.diego{background:var(--verde);}
+    .role.ambos{background:var(--gris);}
+    /* footer */
+    .reveal .slide-number{font-size:14px;}
+    .foot{position:fixed;bottom:10px;left:24px;font-size:13px;color:#9aa7b4;z-index:30;}
+    /* layout helpers */
+    .cols{display:flex;gap:32px;align-items:flex-start;}
+    .cols.c{align-items:center;}
+    .col{flex:1;}
+    .center{text-align:center;}
+    .pill{display:inline-block;background:var(--soft);border:1px solid var(--line);color:var(--azul);font-weight:700;padding:4px 14px;border-radius:18px;font-size:.6em;margin:3px 4px;}
+    .pill.g{background:#e9f8f0;border-color:#bfe9d4;color:var(--verde);}
+    .pill.b{background:#e7f0fb;border-color:#c5dbf3;color:var(--azul2);}
+    .big{font-size:2.4em;font-weight:800;color:var(--azul);line-height:1;}
+    .stat{text-align:center;}
+    .stat .n{font-size:1.9em;font-weight:800;color:var(--azul);}
+    .stat .l{font-size:.5em;color:var(--gris);text-transform:uppercase;letter-spacing:.06em;}
+    .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:18px 22px;}
+    .card.accent{border-left:5px solid var(--azul2);}
+    .card.g{border-left:5px solid var(--supa);background:#f0fbf5;}
+    .card.r{border-left:5px solid var(--rojo);background:#fdf2f0;}
+    table.cmp{font-size:.62em;border-collapse:collapse;width:100%;}
+    table.cmp th{background:var(--azul);color:#fff;padding:8px 12px;text-align:left;}
+    table.cmp td{border:1px solid var(--line);padding:7px 12px;}
+    table.cmp tr:nth-child(even) td{background:var(--soft);}
+    .trad{color:var(--rojo);} .ops{color:var(--verde);font-weight:600;}
+    img.dia{display:block;margin:0 auto;border:1px solid var(--line);border-radius:8px;background:#fff;}
+    .etapa-num{display:inline-flex;width:48px;height:48px;border-radius:50%;background:var(--azul);color:#fff;font-size:.8em;font-weight:800;align-items:center;justify-content:center;margin-right:14px;}
+    .demo-frame{width:100%;height:560px;border:2px solid var(--azul2);border-radius:10px;background:#fff;}
+    .tag{font-size:.5em;font-weight:700;padding:2px 9px;border-radius:6px;background:#eef2f7;color:var(--azul);}
+    .gantt-fechas{font-size:.6em;}
+    .gantt-fechas td{padding:5px 10px;border-bottom:1px solid var(--line);}
+    .gantt-fechas .f{color:var(--azul2);font-weight:700;white-space:nowrap;}
+    .titlebg{background:linear-gradient(135deg,#1F4E79 0%,#2E75B6 100%);}
+    .cover{color:#fff;text-align:center;}
+    .cover h1{color:#fff;font-size:2em;margin:.2em 0;}
+    .cover .sub{font-size:.85em;opacity:.95;}
+    .cover .meta{margin-top:1.2em;font-size:.6em;line-height:1.8;opacity:.95;}
+    .reveal .cover .role-line{display:inline-block;background:rgba(255,255,255,.14);border-radius:10px;padding:10px 20px;margin:6px;}
+  </style>
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+
+    <!-- 1. PORTADA -->
+    <section data-background-gradient="linear-gradient(135deg,#16385a 0%,#2E75B6 100%)" class="cover">
+      <p class="sub" style="letter-spacing:.2em;font-weight:700;">DUOC UC · ESCUELA DE INFORMÁTICA Y TELECOMUNICACIONES</p>
+      <h1>Pipeline DataOps para<br>Predicción de Churn en Telecomunicaciones</h1>
+      <p class="sub">Evaluación Parcial N°2 · ITY1101 Gestión de Datos para IA · Sección 003V</p>
+      <div class="meta">
+        <div class="role-line"><strong style="color:#fff">Benjamín Heresmann</strong> — Ingeniero de Datos<br><small style="color:#dfe9f5">ingesta · validación · arquitectura</small></div>
+        <div class="role-line"><strong style="color:#fff">Diego Hernández</strong> — Ingeniero de BD / DataOps<br><small style="color:#dfe9f5">limpieza · carga · seguridad · deploy</small></div>
+      </div>
+      <p class="sub" style="margin-top:1em;font-size:.62em;">Caso: Telco Customer Churn · 2 de junio de 2026</p>
+    </section>
+
+    <!-- 2. AGENDA -->
+    <section>
+      <span class="kicker">Agenda</span><span class="role ambos">Ambos</span>
+      <h1>Qué veremos</h1>
+      <div class="cols">
+        <div class="col">
+          <ol>
+            <li>El problema y la necesidad del proyecto</li>
+            <li>DataOps vs. enfoque tradicional</li>
+            <li>Arquitectura cloud desacoplada</li>
+            <li>Ciclo de vida del dato (pipeline)</li>
+            <li>Metodología y planificación</li>
+          </ol>
+        </div>
+        <div class="col">
+          <ol start="6">
+            <li>Las 4 etapas del pipeline</li>
+            <li>Plan de seguridad y KPIs</li>
+            <li><strong>Demo funcional en vivo</strong></li>
+            <li>Conclusiones y próximos pasos</li>
+            <li>Preguntas</li>
+          </ol>
+        </div>
+      </div>
+      <p class="center" style="margin-top:.6em"><span class="pill b">15 min presentación</span><span class="pill b">demo en vivo</span><span class="pill b">5 min preguntas</span></p>
+    </section>
+
+    <!-- 3. EL PROBLEMA -->
+    <section>
+      <span class="kicker">Necesidad del proyecto</span><span class="role">Benjamín</span>
+      <h1>El problema: la fuga de clientes</h1>
+      <div class="cols c">
+        <div class="col">
+          <ul>
+            <li>Una telco pierde clientes (<strong>churn</strong>) cada mes.</li>
+            <li>Captar un cliente nuevo cuesta <strong>mucho más</strong> que retener uno.</li>
+            <li>Para retener hay que <strong>anticipar</strong> quién se va a ir.</li>
+            <li>Anticipar exige <strong>datos limpios, confiables y trazables</strong> → ahí entra el pipeline.</li>
+          </ul>
+        </div>
+        <div class="col center">
+          <div class="stat"><div class="n">26,5%</div><div class="l">tasa de churn en el dataset</div></div>
+          <div style="margin-top:18px" class="card accent">
+            <strong>1.869</strong> de <strong>7.043</strong> clientes abandonaron.<br>
+            <small>Cada uno = ingresos recurrentes perdidos.</small>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:.5em"><em>Sin datos de calidad no hay modelo de IA que funcione. El pipeline es el cimiento.</em></p>
+    </section>
+
+    <!-- 4. DATAOPS VS TRADICIONAL -->
+    <section>
+      <span class="kicker">Justificación · valor de DataOps</span><span class="role">Benjamín</span>
+      <h1>¿Por qué DataOps y no el enfoque tradicional?</h1>
+      <table class="cmp">
+        <tr><th>Dimensión</th><th>Enfoque tradicional</th><th>DataOps (nuestro proyecto)</th></tr>
+        <tr><td>Procesamiento</td><td class="trad">Excel manual, copy-paste</td><td class="ops">Scripts automatizados (4 etapas)</td></tr>
+        <tr><td>Errores</td><td class="trad">Invisibles, se detectan tarde</td><td class="ops">Validación explícita + registro de rechazos</td></tr>
+        <tr><td>Reproducibilidad</td><td class="trad">"Funciona en mi PC"</td><td class="ops">Docker + idempotente (mismo input → mismo estado)</td></tr>
+        <tr><td>Trazabilidad</td><td class="trad">Sin historial</td><td class="ops">Cada ejecución auditada en BD (carga_logs)</td></tr>
+        <tr><td>Colaboración</td><td class="trad">Un archivo, una persona</td><td class="ops">Git + GitHub + CI automático</td></tr>
+        <tr><td>Despliegue</td><td class="trad">Local, frágil</td><td class="ops">Cloud (Railway + Supabase), API pública</td></tr>
+      </table>
+      <p style="margin-top:.5em"><em>DataOps = construir un sistema reproducible, observable y colaborativo, no solo "correr un script".</em></p>
+    </section>
+
+    <!-- 5. ARQUITECTURA -->
+    <section>
+      <span class="kicker">Arquitectura · petición del docente</span><span class="role diego">Diego</span>
+      <h1>Arquitectura cloud desacoplada (no monolito)</h1>
+      <img class="dia" src="../img/arquitectura.png" style="width:88%;max-height:300px;object-fit:contain;">
+      <div class="cols" style="margin-top:14px;font-size:.62em;">
+        <div class="col"><span class="pill b">GitHub</span> repo + CI (pytest en cada push)</div>
+        <div class="col"><span class="pill b">Railway</span> cómputo: FastAPI + Docker</div>
+        <div class="col"><span class="pill g">Supabase</span> datos: PostgreSQL 17 + SSL</div>
+      </div>
+      <p style="margin-top:.4em"><em>Tres servicios independientes. Si Railway cae, la BD sigue; se escala la API sin tocar los datos. Cumple lo pedido: <strong>no monolítico, desplegado en Railway, con Supabase</strong>.</em></p>
+    </section>
+
+    <!-- 6. CICLO DE VIDA / PIPELINE -->
+    <section>
+      <span class="kicker">Ciclo de vida del dato</span><span class="role ambos">Ambos</span>
+      <h1>El pipeline: 4 etapas desacopladas</h1>
+      <div class="cols c">
+        <div class="col center"><img class="dia" src="../img/pipeline.png" style="max-height:520px;"></div>
+        <div class="col">
+          <p>Cada etapa es un <strong>endpoint REST independiente</strong>:</p>
+          <ul style="font-size:.8em">
+            <li><code>POST /pipeline/ingest</code></li>
+            <li><code>POST /pipeline/clean</code></li>
+            <li><code>POST /pipeline/validate</code></li>
+            <li><code>POST /pipeline/load</code></li>
+            <li><code>POST /pipeline/run</code> → orquesta las 4</li>
+          </ul>
+          <p><small>Si una etapa falla, las anteriores ya dejaron su salida persistida → se retoma desde ahí.</small></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. METODOLOGIA -->
+    <section>
+      <span class="kicker">Metodología de proyectos</span><span class="role diego">Diego</span>
+      <h1>PMBOK híbrido (predictivo + adaptativo)</h1>
+      <div class="cols">
+        <div class="col card accent">
+          <h3>Predictivo</h3>
+          <p><small>Requisitos fijos, dependencias claras</small></p>
+          <ul style="font-size:.72em"><li>Modelo de BD y DDL</li><li>Esquema de validación</li><li>Dockerfile e integración</li></ul>
+          <p><small>→ cronograma, hitos, Carta Gantt</small></p>
+        </div>
+        <div class="col card g">
+          <h3>Adaptativo</h3>
+          <p><small>Exploratorio, iterativo</small></p>
+          <ul style="font-size:.72em"><li>Reglas de validación semántica</li><li>Afinamiento de KPIs</li><li>Ensayo de la demo</li></ul>
+          <p><small>→ ciclos cortos, revisión cruzada</small></p>
+        </div>
+      </div>
+      <p style="margin-top:.5em"><em>Cascada pura sería rígida; ágil pura, caótica para las dependencias técnicas. El híbrido <strong>planifica lo estable e itera lo incierto</strong>. Seguimiento con <strong>Trello</strong>.</em></p>
+    </section>
+
+    <!-- 8. PLANIFICACION -->
+    <section>
+      <span class="kicker">Planificación · entregables y fechas</span><span class="role diego">Diego</span>
+      <h1>WBS y Carta Gantt</h1>
+      <div class="cols c">
+        <div class="col" style="flex:1.3"><img class="dia" src="../img/gantt.png" style="width:100%;max-height:340px;object-fit:contain;"></div>
+        <div class="col">
+          <table class="gantt-fechas">
+            <tr><td class="f">26–28 may</td><td>Setup + DDL + pipeline (4 etapas)</td></tr>
+            <tr><td class="f">29 may</td><td>Deploy cloud (Supabase + Railway)</td></tr>
+            <tr><td class="f">29 may</td><td>Auditoría + tests E2E</td></tr>
+            <tr><td class="f">30 may–1 jun</td><td>Informe, diagramas, slides</td></tr>
+            <tr><td class="f">2 jun</td><td><strong>Entrega + defensa</strong></td></tr>
+          </table>
+          <p><small>Hitos: H1 stack operativo · H2 pipeline end-to-end · H3 documentación y demo.</small></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. ETAPA 1 -->
+    <section>
+      <span class="kicker">Pipeline · Etapa 1</span><span class="role">Benjamín</span>
+      <h1><span class="etapa-num">1</span>Ingesta</h1>
+      <div class="cols">
+        <div class="col">
+          <p><strong>Qué hace:</strong> captura el CSV fuente y lo deposita en <code>data/raw/</code> con sello temporal, sin transformarlo.</p>
+          <p><strong>Herramienta:</strong> Python (<code>shutil</code> + <code>pandas</code>), logging con conteo de filas.</p>
+        </div>
+        <div class="col card accent">
+          <h3>Decisión técnica</h3>
+          <p><small><strong>Ingesta por lotes (batch)</strong>, no streaming: el dato es un CSV estático → Kafka sería sobreingeniería.</small></p>
+          <p><small>Dataset <strong>versionado en el repo</strong> → reproducible y sin dependencias externas en la demo.</small></p>
+        </div>
+      </div>
+      <p><small>Automatización clave: un comando deja el dato listo y trazado para la siguiente etapa.</small></p>
+    </section>
+
+    <!-- 10. ETAPA 2 -->
+    <section>
+      <span class="kicker">Pipeline · Etapa 2</span><span class="role diego">Diego</span>
+      <h1><span class="etapa-num">2</span>Limpieza y transformación</h1>
+      <div class="cols">
+        <div class="col">
+          <ul>
+            <li><strong>Bug clásico resuelto:</strong> <code>TotalCharges</code> venía como texto con vacíos → a numérico, imputando 0 a clientes con <code>tenure=0</code>.</li>
+            <li>Yes/No → booleano.</li>
+            <li>Feature derivada <code>tenure_group</code> (5 rangos).</li>
+            <li>Eliminación de duplicados por <code>customerID</code>.</li>
+          </ul>
+        </div>
+        <div class="col card accent">
+          <h3>Principio</h3>
+          <p><small>Se trabaja sobre <strong>copia</strong>, nunca sobre el crudo. La limpieza <strong>normaliza</strong>; no decide qué es válido (eso es la etapa 3).</small></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. ETAPA 3 -->
+    <section>
+      <span class="kicker">Pipeline · Etapa 3</span><span class="role">Benjamín</span>
+      <h1><span class="etapa-num">3</span>Validación estructural y semántica</h1>
+      <div class="cols">
+        <div class="col card accent">
+          <h3>Estructural — <code>pandera</code></h3>
+          <ul style="font-size:.72em"><li>Tipos por columna</li><li>Rangos (<code>tenure</code> 0–100)</li><li>Valores permitidos</li><li>Regex de <code>customerID</code></li></ul>
+        </div>
+        <div class="col card g">
+          <h3>Semántica — reglas de negocio</h3>
+          <ul style="font-size:.72em"><li>Si <code>InternetService=No</code> → servicios = "No internet service"</li><li><code>PhoneService</code> ↔ <code>MultipleLines</code></li><li>Coherencia <code>TotalCharges</code></li></ul>
+        </div>
+      </div>
+      <p style="margin-top:.4em"><em>Válidos → <code>data/validated/</code>. Inválidos → <code>data/rejected/</code> <strong>con su motivo</strong>, auditados en la tabla <code>clientes_rechazados</code>.</em></p>
+    </section>
+
+    <!-- 12. ETAPA 4 -->
+    <section>
+      <span class="kicker">Pipeline · Etapa 4</span><span class="role diego">Diego</span>
+      <h1><span class="etapa-num">4</span>Carga a base de datos</h1>
+      <div class="cols">
+        <div class="col">
+          <ul>
+            <li>Persiste en <strong>Supabase PostgreSQL</strong> (SQLAlchemy + SSL).</li>
+            <li><strong>Full-refresh idempotente:</strong> <code>TRUNCATE</code> + insert en una transacción → reejecutar da siempre el mismo estado.</li>
+            <li>Atómico: ante fallo, <code>ROLLBACK</code>.</li>
+            <li>Auditoría en <code>carga_logs</code> (nunca se trunca).</li>
+          </ul>
+        </div>
+        <div class="col card accent">
+          <h3>Manejo de anomalías</h3>
+          <p><small>Conexión caída → estado "ERROR" en log · violación de constraint → rollback · inválidos → separados y auditados, nunca descartados en silencio.</small></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13. SEGURIDAD -->
+    <section>
+      <span class="kicker">Plan de seguridad DataOps</span><span class="role diego">Diego</span>
+      <h1>Seguridad: legal + técnica</h1>
+      <div class="cols">
+        <div class="col card r">
+          <h3>Normas legales</h3>
+          <ul style="font-size:.7em"><li><strong>Ley 19.628</strong> — datos personales (Chile)</li><li><strong>Ley 21.459</strong> — delitos informáticos</li><li>Tratamiento limitado al propósito</li></ul>
+        </div>
+        <div class="col card accent">
+          <h3>Técnicas</h3>
+          <ul style="font-size:.7em"><li>Cifrado en tránsito (SSL a la BD)</li><li>Control de acceso (rol solo-SELECT)</li><li>Secretos en variables de entorno</li><li>Anti-inyección (SQL parametrizado)</li><li>Enmascaramiento / logs sin PII</li></ul>
+        </div>
+      </div>
+      <p class="center"><span class="pill">enmascaramiento</span><span class="pill">control de acceso</span><span class="pill">cifrado</span><span class="pill">auditoría</span></p>
+    </section>
+
+    <!-- 14. KPIs -->
+    <section>
+      <span class="kicker">Monitoreo</span><span class="role diego">Diego</span>
+      <h1>KPIs del pipeline</h1>
+      <div class="cols">
+        <div class="col">
+          <table class="cmp">
+            <tr><th>KPI</th><th>Umbral de alerta</th></tr>
+            <tr><td>Latencia total</td><td>&gt; 30 s</td></tr>
+            <tr><td>Tasa de validez</td><td>&lt; 95%</td></tr>
+            <tr><td>Completitud por columna</td><td>&lt; 95%</td></tr>
+            <tr><td>Volumen procesado</td><td>&lt; 5.000</td></tr>
+            <tr><td>Estado de ejecución</td><td>≠ OK</td></tr>
+          </table>
+        </div>
+        <div class="col card g">
+          <h3>Consultables en vivo</h3>
+          <p><small>Persistidos en <code>carga_logs</code> y expuestos por la API:</small></p>
+          <p><code>GET /kpis/resumen</code><br><code>GET /kpis/last</code></p>
+          <p><small>En producción se integran a Grafana / alertas.</small></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 15. DEMO EN VIVO -->
+    <section data-background-color="#0b1f2e">
+      <span class="kicker" style="color:#7fb3e0">Demo funcional en vivo</span><span class="role ambos">Ambos</span>
+      <h1 style="color:#fff">Demo: pipeline en producción</h1>
+      <iframe class="demo-frame" src="https://telco-api-production-e466.up.railway.app/docs" title="Swagger en vivo"></iframe>
+      <p style="color:#cfe0f0;font-size:.55em;margin-top:8px">
+        Ejecutamos <code style="background:#13344a;color:#7fe0b0">POST /pipeline/run</code> en vivo → carga 7.043 clientes en Supabase ·
+        luego <code style="background:#13344a;color:#7fe0b0">GET /kpis/resumen</code> y <code style="background:#13344a;color:#7fe0b0">GET /rechazados</code>.
+        <br>URL: telco-api-production-e466.up.railway.app/docs
+      </p>
+    </section>
+
+    <!-- 16. CONCLUSIONES -->
+    <section>
+      <span class="kicker">Conclusiones</span><span class="role ambos">Ambos</span>
+      <h1>Conclusiones y próximos pasos</h1>
+      <div class="cols">
+        <div class="col">
+          <h3>Lo logrado</h3>
+          <ul style="font-size:.78em">
+            <li>Pipeline DataOps de 4 etapas, <strong>reproducible y trazable</strong>.</li>
+            <li>Desplegado en la nube, <strong>no monolítico</strong>.</li>
+            <li>Probado end-to-end + CI verde.</li>
+          </ul>
+        </div>
+        <div class="col">
+          <h3>Próximos pasos</h3>
+          <ul style="font-size:.78em">
+            <li><strong>Evaluación 3:</strong> entrenar modelo de clasificación sobre <code>churn</code>.</li>
+            <li>Variables clave: <code>tenure</code>, <code>Contract</code>, <code>MonthlyCharges</code>.</li>
+            <li>Orquestación (Airflow) y dashboard de KPIs.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card accent" style="margin-top:.4em"><small>La tabla <code>clientes</code> en Supabase ya queda lista como fuente de entrenamiento para el modelo de IA.</small></div>
+    </section>
+
+    <!-- 17. CIERRE -->
+    <section data-background-gradient="linear-gradient(135deg,#16385a 0%,#2E75B6 100%)" class="cover">
+      <h1 style="font-size:2.2em">¡Gracias!</h1>
+      <p class="sub">¿Preguntas?</p>
+      <div class="meta" style="font-size:.55em;margin-top:1.5em">
+        <p>Repositorio: github.com/BenjaminHeresmann/telco-churn-pipeline</p>
+        <p>API: telco-api-production-e466.up.railway.app/docs</p>
+        <p>Benjamín Heresmann · Diego Hernández — Sección 003V</p>
+      </div>
+    </section>
+
+  </div>
+</div>
+<div class="foot">Pipeline DataOps Telco Churn · ITY1101 Duoc UC</div>
+
+<script src="reveal/dist/reveal.js"></script>
+<script src="reveal/plugin/highlight/highlight.js"></script>
+<script src="reveal/plugin/notes/notes.js"></script>
+<script>
+  Reveal.initialize({
+    hash:true, slideNumber:'c/t', transition:'slide',
+    width:1280, height:720, margin:0.04,
+    plugins:[ RevealHighlight, RevealNotes ],
+  });
+</script>
+</body>
+</html>
