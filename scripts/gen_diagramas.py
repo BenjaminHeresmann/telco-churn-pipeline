@@ -1,7 +1,8 @@
-"""Renderiza los diagramas del informe a PNG via mermaid.ink (sin dependencias).
+"""Renderiza los diagramas del informe/slides a PNG via mermaid.ink (sin dependencias).
 
 Uso: python scripts/gen_diagramas.py
-Genera PNGs en docs/img/ para incrustar en el informe Word/PDF.
+Genera PNGs en docs/img/ con la paleta del sistema de diseno (azul #15406b,
+acento #2563EB, verde #10B981, grises slate), fondo blanco para integrar en cards.
 """
 from __future__ import annotations
 
@@ -12,46 +13,55 @@ from pathlib import Path
 OUT = Path(__file__).resolve().parents[1] / "docs" / "img"
 OUT.mkdir(parents=True, exist_ok=True)
 
+# Tema base coherente con el sistema de diseno de las slides/informe.
+INIT = (
+    "%%{init: {'theme':'base','themeVariables':{"
+    "'fontFamily':'Trebuchet MS, Segoe UI, Arial',"
+    "'primaryColor':'#EAF1F9','primaryBorderColor':'#15406b','primaryTextColor':'#0F172A',"
+    "'lineColor':'#64748B','tertiaryColor':'#F1F5F9','clusterBkg':'#F8FAFC',"
+    "'clusterBorder':'#CBD5E1'}}}%%\n"
+)
+
 DIAGRAMAS = {
-    "arquitectura": """flowchart LR
+    "arquitectura": INIT + """flowchart LR
   DEV([Equipo]) -->|git push| GH
   subgraph GH["GitHub"]
     REPO[Repo + data/source]
     CI[GitHub Actions<br/>pytest CI]
   end
   GH -->|railway up| RW
-  subgraph RW["Railway (computo)"]
-    API[FastAPI + Docker<br/>API REST 4 etapas]
+  subgraph RW["Railway · computo"]
+    API[FastAPI + Docker<br/>API REST · 4 etapas]
   end
-  subgraph SB["Supabase (datos)"]
-    DB[(PostgreSQL 17<br/>clientes / carga_logs<br/>clientes_rechazados)]
+  subgraph SB["Supabase · datos"]
+    DB[(PostgreSQL 17<br/>clientes · carga_logs<br/>clientes_rechazados)]
   end
   API -->|SQL + SSL| DB
-  USERS([Swagger / curl / cron]) -->|HTTP REST| API
-  style GH fill:#e7e7ff,stroke:#6666cc
-  style RW fill:#d4e6f1,stroke:#2874a6
-  style SB fill:#d5f5e3,stroke:#1e8449
+  USERS([Swagger · curl · cron]) -->|HTTP REST| API
+  style GH fill:#EEF2FB,stroke:#1D4ED8,stroke-width:1px
+  style RW fill:#EAF1F9,stroke:#15406b,stroke-width:1px
+  style SB fill:#E7F8F0,stroke:#10B981,stroke-width:1px
 """,
-    "pipeline": """flowchart TB
-  SRC[CSV fuente<br/>data/source - repo]:::src
+    "pipeline": INIT + """flowchart TB
+  SRC[CSV fuente<br/>data/source · repo]:::src
   SRC --> E1
-  E1[1 INGESTA<br/>copia + timestamp + log]:::e --> RAW[(data/raw)]:::d
+  E1[<b>1 · INGESTA</b><br/>copia + timestamp + log]:::e --> RAW[(data/raw)]:::d
   RAW --> E2
-  E2[2 LIMPIEZA<br/>TotalCharges, booleanos,<br/>tenure_group, duplicados]:::e --> CLN[(data/clean)]:::d
+  E2[<b>2 · LIMPIEZA</b><br/>TotalCharges · booleanos<br/>tenure_group · duplicados]:::e --> CLN[(data/clean)]:::d
   CLN --> E3
-  E3[3 VALIDACION<br/>estructural pandera +<br/>semantica reglas negocio]:::e --> VAL[(data/validated)]:::ok
+  E3[<b>3 · VALIDACION</b><br/>estructural pandera +<br/>semantica reglas negocio]:::e --> VAL[(data/validated)]:::ok
   E3 --> REJ[(data/rejected<br/>con motivo)]:::ko
   VAL --> E4
-  E4[4 CARGA BD<br/>full-refresh idempotente<br/>transaccional + SSL]:::e --> DB[(Supabase<br/>PostgreSQL 17)]:::db
+  E4[<b>4 · CARGA BD</b><br/>full-refresh idempotente<br/>transaccional + SSL]:::e --> DB[(Supabase<br/>PostgreSQL 17)]:::db
   REJ -.audita.-> DB
-  classDef src fill:#fff4e6,stroke:#d68910
-  classDef e fill:#d4e6f1,stroke:#2874a6
-  classDef d fill:#eaf2f8,stroke:#5499c7
-  classDef ok fill:#d5f5e3,stroke:#1e8449
-  classDef ko fill:#fadbd8,stroke:#c0392b
-  classDef db fill:#ebdef0,stroke:#8e44ad
+  classDef src fill:#FEF6E7,stroke:#D9A21B,color:#0F172A
+  classDef e fill:#EAF1F9,stroke:#15406b,color:#0F172A,stroke-width:1.5px
+  classDef d fill:#F1F5F9,stroke:#94A3B8,color:#334155
+  classDef ok fill:#E7F8F0,stroke:#10B981,color:#0F172A
+  classDef ko fill:#FDECEA,stroke:#E0533D,color:#0F172A
+  classDef db fill:#EFE9FB,stroke:#7C3AED,color:#0F172A
 """,
-    "er": """erDiagram
+    "er": INIT + """erDiagram
   CLIENTES {
     varchar customer_id PK
     varchar gender
@@ -77,10 +87,10 @@ DIAGRAMAS = {
     text motivo_rechazo
     varchar tipo_validacion
   }
-  CLIENTES }o..o{ CARGA_LOGS : "auditado por (logico)"
-  CLIENTES_RECHAZADOS }o..o{ CARGA_LOGS : "auditado por (logico)"
+  CLIENTES }o..o{ CARGA_LOGS : "auditado (logico)"
+  CLIENTES_RECHAZADOS }o..o{ CARGA_LOGS : "auditado (logico)"
 """,
-    "gantt": """gantt
+    "gantt": INIT + """gantt
   title Cronograma Evaluacion 2 - Pipeline Telco Churn
   dateFormat YYYY-MM-DD
   axisFormat %d-%m
@@ -109,8 +119,7 @@ def render(nombre: str, code: str) -> None:
     url = f"https://mermaid.ink/img/{b64}?type=png&bgColor=FFFFFF"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     data = urllib.request.urlopen(req, timeout=60).read()
-    destino = OUT / f"{nombre}.png"
-    destino.write_bytes(data)
+    (OUT / f"{nombre}.png").write_bytes(data)
     print(f"  {nombre}.png  ({len(data):,} bytes)")
 
 
@@ -121,9 +130,6 @@ def main() -> None:
             render(nombre, code)
         except Exception as exc:
             print(f"  ERROR en {nombre}: {str(exc)[:150]}")
-    test = OUT / "_test.png"
-    if test.exists():
-        test.unlink()
     print("Listo.")
 
 
