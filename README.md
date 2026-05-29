@@ -8,6 +8,21 @@ Pipeline DataOps **desacoplado** de 4 etapas para preparar el dataset Telco Cust
 **Evaluación:** Parcial N°2
 **Equipo:** Benjamín Heresmann, Diego Hernández (equipo de 2 autorizado por el docente)
 
+## 🚀 Desplegado y funcionando
+
+| Recurso | URL |
+|---|---|
+| **API en producción (Railway)** | https://telco-api-production-e466.up.railway.app |
+| **Documentación interactiva (Swagger)** | https://telco-api-production-e466.up.railway.app/docs |
+| **Health check** | https://telco-api-production-e466.up.railway.app/health |
+| **Repositorio (GitHub)** | https://github.com/BenjaminHeresmann/telco-churn-pipeline |
+| **Base de datos** | PostgreSQL gestionado en Supabase (proyecto `telco-churn`) |
+
+**Probar el pipeline completo en la nube (carga 7.043 clientes en Supabase):**
+```bash
+curl -X POST https://telco-api-production-e466.up.railway.app/pipeline/run
+```
+
 ---
 
 ## Arquitectura desacoplada

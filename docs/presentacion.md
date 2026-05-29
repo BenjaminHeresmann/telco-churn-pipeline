@@ -201,13 +201,19 @@ Persistencia: tabla `carga_logs`. Alertas vía log `WARNING`. Próximo paso: das
 ## Slides 14-18 — DEMO EN VIVO CLOUD (5 min)
 **Quién habla:** alternancia
 
+**URLs reales del deploy (ya en producción):**
+- API: https://telco-api-production-e466.up.railway.app
+- Swagger: https://telco-api-production-e466.up.railway.app/docs
+- Repo: https://github.com/BenjaminHeresmann/telco-churn-pipeline
+- BD: Supabase proyecto `telco-churn`
+
 **Setup previo:**
 - Navegador con 3 pestañas abiertas:
-  1. GitHub repo del proyecto
-  2. Railway dashboard del servicio
-  3. Supabase dashboard (Table Editor + Storage)
-- Terminal abierto con `curl` o Postman para llamar la API
-- URL pública de Railway lista para copiar
+  1. GitHub repo del proyecto (mostrar commits + Actions verde)
+  2. Railway dashboard del servicio `telco-api` (mostrar Online + logs)
+  3. Supabase dashboard (Table Editor: tablas `clientes`, `carga_logs`, `clientes_rechazados`)
+- 4ta pestaña: el Swagger UI (`/docs`) listo para disparar endpoints
+- Terminal con `curl` como respaldo
 
 **Guion de la demo:**
 
