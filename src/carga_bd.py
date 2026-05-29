@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -56,34 +58,46 @@ MAPEO_COLUMNAS = {
 }
 
 
+@lru_cache(maxsize=1)
 def _build_engine() -> Engine:
-    """Construye el engine SQLAlchemy.
+    """Construye (una sola vez) el engine SQLAlchemy y lo cachea.
 
     Prioriza DATABASE_URL (recomendado para Supabase y Railway).
     Si no esta seteado, ensambla la URL desde variables individuales.
     Fuerza sslmode=require para conexiones a Supabase.
+
+    Se cachea con lru_cache para reutilizar el mismo pool de conexiones en
+    todas las requests de la API. Crear un engine por request agotaria el
+    limite de conexiones del pooler de Supabase (free tier). pool_size y
+    max_overflow se mantienen bajos porque el pooler de Supabase ya multiplexa.
     """
     load_dotenv(PROJECT_ROOT / ".env")
 
     database_url = os.getenv("DATABASE_URL")
-    if database_url:
-        if database_url.startswith("postgresql://"):
-            database_url = database_url.replace(
-                "postgresql://", "postgresql+psycopg2://", 1
-            )
-        return create_engine(database_url, future=True, pool_pre_ping=True)
+    if not database_url:
+        user = os.getenv("POSTGRES_USER", "postgres")
+        pwd = os.getenv("POSTGRES_PASSWORD", "")
+        host = os.getenv("POSTGRES_HOST", "localhost")
+        port = os.getenv("POSTGRES_PORT", "5432")
+        db = os.getenv("POSTGRES_DB", "postgres")
+        sslmode = os.getenv("POSTGRES_SSLMODE", "require")
+        database_url = (
+            f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
+            f"?sslmode={sslmode}"
+        )
+    elif database_url.startswith("postgresql://"):
+        database_url = database_url.replace(
+            "postgresql://", "postgresql+psycopg2://", 1
+        )
 
-    user = os.getenv("POSTGRES_USER", "postgres")
-    pwd = os.getenv("POSTGRES_PASSWORD", "")
-    host = os.getenv("POSTGRES_HOST", "localhost")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    db = os.getenv("POSTGRES_DB", "postgres")
-    sslmode = os.getenv("POSTGRES_SSLMODE", "require")
-    url = (
-        f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
-        f"?sslmode={sslmode}"
+    return create_engine(
+        database_url,
+        future=True,
+        pool_pre_ping=True,
+        pool_size=3,
+        max_overflow=2,
+        pool_recycle=300,
     )
-    return create_engine(url, future=True, pool_pre_ping=True)
 
 
 def _ultimo_validado() -> Path:
@@ -95,9 +109,20 @@ def _ultimo_validado() -> Path:
     return archivos[-1]
 
 
-def _ultimo_rechazado() -> Path | None:
-    archivos = sorted(DATA_REJECTED.glob("telco_churn_rechazados_*.csv"))
-    return archivos[-1] if archivos else None
+def _rechazado_de(ruta_validados: Path) -> Path | None:
+    """Devuelve el archivo de rechazados que corresponde al MISMO timestamp
+    que el archivo de validados de esta corrida.
+
+    La etapa de validacion nombra ambos con el mismo sufijo de timestamp
+    (telco_churn_valid_<ts>.csv y telco_churn_rechazados_<ts>.csv). Emparejar
+    por timestamp evita auditar rechazados de una corrida anterior cuando la
+    corrida actual no genero ninguno.
+    """
+    m = re.search(r"telco_churn_valid_(\d{8}_\d{6})\.csv$", ruta_validados.name)
+    if not m:
+        return None
+    candidato = DATA_REJECTED / f"telco_churn_rechazados_{m.group(1)}.csv"
+    return candidato if candidato.exists() else None
 
 
 def _registrar_log(engine: Engine, **kwargs) -> None:
@@ -146,7 +171,7 @@ def cargar(ruta_validados: Path | None = None) -> dict:
         detalle_errores = str(err)[:1000]
         log.error("Fallo carga principal: %s", err)
 
-    ruta_rechazados = _ultimo_rechazado()
+    ruta_rechazados = _rechazado_de(ruta_validados)
     n_rechazados = 0
     if ruta_rechazados is not None:
         try:

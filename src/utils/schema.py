@@ -6,7 +6,6 @@ normalizados a booleanos cuando corresponde.
 """
 from __future__ import annotations
 
-import pandera as pa
 from pandera import Column, DataFrameSchema, Check
 
 

@@ -12,8 +12,10 @@ Endpoints:
     POST /pipeline/clean        - solo limpieza
     POST /pipeline/validate     - solo validacion
     POST /pipeline/load         - solo carga BD
-    GET  /kpis/last             - ultimos KPIs por ejecucion
-    GET  /logs/last             - ultimos N logs
+    GET  /kpis/last             - ultimos N registros de carga_logs
+    GET  /kpis/resumen          - KPIs agregados de todas las ejecuciones
+    GET  /logs/last             - ultimas N lineas del log de hoy
+    GET  /rechazados            - ultimos N registros rechazados con motivo
     GET  /docs                  - Swagger UI auto-generado por FastAPI
 """
 from __future__ import annotations
@@ -65,11 +67,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-origins = os.getenv("CORS_ORIGINS", "*").split(",")
+origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")]
+# allow_credentials=False: la API no usa cookies ni auth por sesion, y la
+# combinacion allow_credentials=True + allow_origins=["*"] es invalida segun
+# la especificacion CORS (los navegadores la rechazan).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in origins],
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

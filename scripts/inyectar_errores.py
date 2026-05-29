@@ -17,7 +17,8 @@ import pandas as pd
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-FUENTE = PROJECT_ROOT.parent / "0.CASOS_PARCIALES_Evaluaciones-2y3" / "01_Telco Customer Churn" / "02_Base_WA_Fn-UseC_-Telco-Customer-Churn.csv"
+# Usa el dataset versionado en el repo (portable: funciona en cualquier clon).
+FUENTE = PROJECT_ROOT / "data" / "source" / "telco_churn_source.csv"
 DESTINO = PROJECT_ROOT / "data" / "raw" / "telco_churn_demo_con_errores.csv"
 
 
