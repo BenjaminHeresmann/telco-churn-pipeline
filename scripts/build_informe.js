@@ -277,6 +277,30 @@ children.push(h1("9. Conclusiones y próximos pasos"));
 children.push(p("La solución cumple los cuatro requisitos del pipeline DataOps —ingesta, limpieza, validación y carga— de forma **reproducible** (Docker + dataset versionado), **trazable** (logs y auditoría en BD), **segura** (SSL, control de acceso, secretos fuera del repo) y **escalable por módulos** (arquitectura cloud desacoplada). El sistema está desplegado y probado end-to-end en producción."));
 children.push(p("**Próximos pasos:** (Evaluación 3) entrenar un modelo de clasificación binaria sobre `churn` usando las variables de mayor poder discriminante (`tenure`, `Contract`, `MonthlyCharges`, `InternetService`, `PaymentMethod`); a mediano plazo, conectar una fuente real vía la etapa de ingesta, migrar la orquestación a Airflow ante múltiples fuentes y exponer un dashboard de KPIs en Grafana o Power BI."));
 
+// ANEXO A — EVIDENCIAS
+const EV = path.join(IMG, "evidencia");
+function figura(file, titulo, caption, maxW = 590, maxH = 540) {
+  const out = [new Paragraph({ spacing: { before: 160, after: 40 },
+    children: [new TextRun({ text: titulo, bold: true, color: AZUL2, size: 21 })] })];
+  out.push(img(path.join(EV, file), maxW, maxH, titulo));
+  if (caption) out.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 120 },
+    children: [new TextRun({ text: caption, italics: true, size: 17, color: "808080" })] }));
+  return out;
+}
+children.push(new Paragraph({ pageBreakBefore: true, heading: HeadingLevel.HEADING_1,
+  spacing: { before: 0, after: 80 }, children: [new TextRun({ text: "Anexo A — Evidencias de ejecución", bold: true, color: AZUL, font: "Arial", size: 30 })] }));
+children.push(p("El cuerpo del informe corresponde a las secciones 1 a 9 (páginas 1–11). Este anexo es material de respaldo: capturas reales del sistema en producción, tomadas el 29 de mayo de 2026."));
+[
+  ...figura("01_swagger.png", "A.1 — API documentada (Swagger UI en producción)",
+    "Endpoints REST del pipeline expuestos y autodocumentados en /docs."),
+  ...figura("04_pipeline_run.png", "A.2 — Pipeline ejecutado en vivo (POST /pipeline/run)",
+    "Respuesta 200 con las 4 etapas OK y archivos generados; URL real de Railway."),
+  ...figura("05_supabase_datos.png", "A.3 — Datos en Supabase (consulta SQL directa)",
+    "7.043 clientes cargados en PostgreSQL 17; muestra real de la tabla clientes.", 600, 430),
+  ...figura("06_github_actions.png", "A.4 — Integración continua (GitHub Actions)",
+    "Workflows de CI en verde para cada push al repositorio público.", 600, 470),
+].forEach(el => children.push(el));
+
 // ---- documento ----
 const doc = new Document({
   creator: "Benjamín Heresmann · Diego Hernández",

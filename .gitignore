@@ -48,8 +48,5 @@ desktop.ini
 # Reportes generados
 reports/*.html
 
-# Build artifacts de documentos (node_modules, previews)
-build/node_modules/
-build/preview/
-build/package*.json
-build/build_informe.js
+# Build artifacts de documentos (carpeta transitoria; los generadores viven en scripts/)
+build/
