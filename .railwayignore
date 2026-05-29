@@ -1,0 +1,14 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/raw/
+data/clean/
+data/validated/
+data/rejected/
+logs/
+.github/
+docs/
+tests/
+*.bak

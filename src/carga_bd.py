@@ -129,7 +129,15 @@ def cargar(ruta_validados: Path | None = None) -> dict:
     estado = "OK"
     detalle_errores = None
     try:
+        # Carga full-refresh idempotente: se vacia la tabla de estado antes de
+        # insertar, de modo que reejecutar el pipeline produzca el mismo
+        # resultado (principio DataOps de reproducibilidad). El historico de
+        # auditoria (carga_logs) NUNCA se trunca. TRUNCATE + INSERT van en la
+        # misma transaccion: si el insert falla, ROLLBACK deja la tabla intacta.
         with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE clientes RESTART IDENTITY CASCADE"))
+            conn.execute(text("TRUNCATE TABLE clientes_rechazados RESTART IDENTITY"))
+            log.info("Tablas de estado vaciadas (full-refresh)")
             df.to_sql("clientes", conn, if_exists="append", index=False, method="multi", chunksize=500)
             n_insertados = n_leidos
             log.info("Insertados %d registros en clientes", n_insertados)
