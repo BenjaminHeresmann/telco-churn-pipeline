@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY sql/ ./sql/
 COPY scripts/ ./scripts/
+COPY data/source/ ./data/source/
 
 RUN mkdir -p data/raw data/clean data/validated data/rejected logs
 

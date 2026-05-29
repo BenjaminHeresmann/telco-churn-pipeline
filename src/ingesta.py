@@ -20,6 +20,8 @@ from utils.supabase_client import descargar_csv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_RAW = PROJECT_ROOT / "data" / "raw"
+# Dataset fuente versionado en el repo (fallback por defecto, viaja en la imagen Docker)
+DATA_SOURCE_DEFAULT = PROJECT_ROOT / "data" / "source" / "telco_churn_source.csv"
 
 log = get_logger("ingesta")
 
@@ -30,7 +32,8 @@ def ingestar(origen: str | None = None) -> Path:
     Estrategia de fuentes (en orden de prioridad):
     1. Parametro 'origen' explicito.
     2. Variable SUPABASE_URL + SUPABASE_KEY -> descarga desde Supabase Storage.
-    3. Variable SOURCE_CSV_PATH -> lee archivo local.
+    3. Variable SOURCE_CSV_PATH -> lee archivo local en ruta indicada.
+    4. Fallback: data/source/telco_churn_source.csv versionado en el repo.
 
     Devuelve la ruta del archivo en data/raw/.
     """
@@ -64,15 +67,17 @@ def ingestar(origen: str | None = None) -> Path:
 
     else:
         path_local = os.getenv("SOURCE_CSV_PATH")
-        if not path_local:
-            raise ValueError(
-                "No hay fuente configurada. Setea SUPABASE_URL+SUPABASE_KEY "
-                "para Storage o SOURCE_CSV_PATH para archivo local."
-            )
-        ruta_origen = Path(path_local).expanduser().resolve()
+        if path_local:
+            ruta_origen = Path(path_local).expanduser().resolve()
+            log.info("Ingesta desde SOURCE_CSV_PATH: %s", ruta_origen)
+        else:
+            ruta_origen = DATA_SOURCE_DEFAULT
+            log.info("Ingesta desde dataset versionado en repo: %s", ruta_origen)
         if not ruta_origen.exists():
-            raise FileNotFoundError(f"Archivo local no encontrado: {ruta_origen}")
-        log.info("Ingesta desde archivo local (fallback): %s", ruta_origen)
+            raise FileNotFoundError(
+                f"Archivo fuente no encontrado: {ruta_origen}. "
+                "Verifica data/source/telco_churn_source.csv o setea SOURCE_CSV_PATH."
+            )
         shutil.copy2(ruta_origen, ruta_destino)
 
     df = pd.read_csv(ruta_destino)

@@ -16,7 +16,7 @@ __pycache__/
 .env
 .env.local
 
-# Datos del pipeline (no se versionan, solo el dataset fuente)
+# Datos del pipeline (no se versionan las zonas de trabajo)
 data/raw/*
 data/clean/*
 data/validated/*
@@ -25,6 +25,7 @@ data/rejected/*
 !data/clean/.gitkeep
 !data/validated/.gitkeep
 !data/rejected/.gitkeep
+# data/source/ SI se versiona: contiene el dataset fuente del caso (fallback de ingesta)
 
 # Logs
 logs/*.log
