@@ -115,8 +115,9 @@ children.push(new Table({
   alignment: AlignmentType.CENTER,
   rows: [
     ["Asignatura", "ITY1101 — Gestión de Datos para IA"],
+    ["Sección", "003V"],
     ["Caso", "Telco Customer Churn (clasificación de abandono)"],
-    ["Integrantes", "Benjamín Heresmann · Diego Hernández"],
+    ["Integrantes", "Benjamín Heresmann — Ingeniero de Datos (ingesta, validación, arquitectura)\nDiego Hernández — Ingeniero de BD / DataOps (limpieza, carga, seguridad, deploy)"],
     ["Arquitectura", "Pipeline modular cloud (FastAPI · Railway · Supabase)"],
     ["Metodología", "PMBOK híbrido (predictivo + adaptativo)"],
     ["Fecha de entrega", "2 de junio de 2026"],
@@ -128,7 +129,7 @@ children.push(new Table({
     new TableCell({ width: { size: 4600, type: WidthType.DXA },
       margins: { top: 60, bottom: 60, left: 120, right: 120 },
       borders: { top: { style: BorderStyle.SINGLE, size: 1, color: BORDE }, bottom: { style: BorderStyle.SINGLE, size: 1, color: BORDE }, left: { style: BorderStyle.SINGLE, size: 1, color: BORDE }, right: { style: BorderStyle.SINGLE, size: 1, color: BORDE } },
-      children: [new Paragraph({ children: [new TextRun({ text: v, size: 20 })] })] }),
+      children: String(v).split("\n").map(linea => new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: linea, size: 20 })] })) }),
   ] })),
 }));
 children.push(new Paragraph({ children: [new PageBreak()] }));
