@@ -30,10 +30,10 @@ curl -X POST https://telco-api-production-e466.up.railway.app/pipeline/run
 ```
 ┌────────────────┐         ┌──────────────────────┐         ┌────────────────────┐
 │  GitHub Repo   │ ──CI──► │   Railway            │ ──SQL──►│   Supabase         │
-│  - Pipeline    │  Push   │   - FastAPI (Docker) │  HTTPS  │   - PostgreSQL 15  │
-│  - Dockerfile  │ ──CD──► │   - 4 etapas pipeline│         │   - Storage CSVs   │
-│  - Actions     │  Auto   │   - /pipeline/run    │         │   - Dashboard SQL  │
-│                │         │   - /kpis /logs      │         │                    │
+│  - Pipeline    │  Push   │   - FastAPI (Docker) │  HTTPS  │   - PostgreSQL 17  │
+│  - data/source │ deploy  │   - 4 etapas pipeline│  (SSL)  │   - Dashboard SQL  │
+│  - Dockerfile  │ ──────► │   - /pipeline/run    │         │   - Storage (opc.) │
+│  - Actions(CI) │         │   - /kpis /logs      │         │                    │
 └────────────────┘         └──────────────────────┘         └────────────────────┘
                                        │
                                        ▼
@@ -43,13 +43,20 @@ curl -X POST https://telco-api-production-e466.up.railway.app/pipeline/run
                               workflows externos)
 ```
 
+> **Fuente del CSV (MVP):** el dataset viaja versionado en el repo
+> (`data/source/telco_churn_source.csv`) y dentro de la imagen Docker. Supabase se
+> usa como **base de datos** (requisito del docente). El código además soporta
+> descargar el CSV desde Supabase Storage si se configuran `SUPABASE_URL`/`KEY`,
+> pero no es necesario para el MVP.
+
 **Componentes desacoplados:**
 
 | Componente | Rol | Servicio | Justificación |
 |---|---|---|---|
 | **Capa de datos** | PostgreSQL + Storage | Supabase | Postgres gestionado, SSL out-of-the-box, UI de admin, tier gratis |
 | **Capa de procesamiento** | API REST con FastAPI | Railway | Deploy desde Dockerfile, $PORT dinámico, healthcheck nativo, tier gratis |
-| **CI/CD** | Tests + deploy auto | GitHub Actions | Validación en cada push, deploy automático al merge |
+| **CI** | Tests automáticos | GitHub Actions | Corre `pytest` en cada push a `main` (gate de calidad) |
+| **CD** | Deploy a Railway | `railway up` | Deploy manual con un comando (auto-deploy activable conectando el repo en Railway) |
 | **Documentación API** | Swagger UI | FastAPI (built-in) | Endpoint `/docs` autogenerado, ideal para demo |
 
 Cada uno corre independiente. Si Railway cae, Supabase sigue. Si la API se escala horizontalmente, la BD no se duplica. **No es monolito.**
@@ -59,10 +66,10 @@ Cada uno corre independiente. Si Railway cae, Supabase sigue. Si la API se escal
 ## Pipeline de 4 etapas (cada una un endpoint independiente)
 
 ```
-CSV en Supabase Storage
+CSV fuente (data/source/ en repo · o Supabase Storage si se configura)
         │
         ▼
-[POST /pipeline/ingest]    → data/raw/    (descarga + timestamp + log)
+[POST /pipeline/ingest]    → data/raw/    (copia + timestamp + log)
         │
         ▼
 [POST /pipeline/clean]     → data/clean/  (TotalCharges fix, booleanos, features)
@@ -89,7 +96,7 @@ CSV en Supabase Storage
 | ORM / DB driver | SQLAlchemy + psycopg2 | 2.0 / 2.9 |
 | Cliente Supabase | supabase-py | 2.4 |
 | Containerización | Docker | latest |
-| BD gestionada | PostgreSQL (Supabase) | 15 |
+| BD gestionada | PostgreSQL (Supabase) | 17 |
 | Host backend | Railway | - |
 | CI/CD | GitHub Actions | v4 |
 | Seguimiento proyecto | Trello | - |
@@ -109,24 +116,26 @@ telco-churn-pipeline/
 ├── .gitignore                      Excluye datos, logs, credenciales, venv
 ├── .github/workflows/ci.yml        Tests automaticos en push
 ├── data/
-│   ├── raw/                        CSV descargado de Supabase Storage
-│   ├── clean/                      Post-limpieza
-│   ├── validated/                  Post-validacion (van a BD)
-│   └── rejected/                   Fallaron validacion (con motivo)
+│   ├── source/                     ★ Dataset fuente versionado (telco_churn_source.csv)
+│   ├── raw/                        CSV ingestado con timestamp (efimero)
+│   ├── clean/                      Post-limpieza (efimero)
+│   ├── validated/                  Post-validacion, van a BD (efimero)
+│   └── rejected/                   Fallaron validacion, con motivo (efimero)
 ├── src/
 │   ├── api.py                      ★ FastAPI - endpoints de cada etapa
-│   ├── ingesta.py                  Etapa 1 (desde Supabase Storage o local)
+│   ├── ingesta.py                  Etapa 1 (repo / Supabase Storage / ruta local)
 │   ├── limpieza.py                 Etapa 2
 │   ├── validacion.py               Etapa 3
-│   ├── carga_bd.py                 Etapa 4 (Supabase Postgres con SSL)
+│   ├── carga_bd.py                 Etapa 4 (Supabase Postgres con SSL, idempotente)
 │   ├── run_pipeline.py             Orquestador CLI standalone
 │   └── utils/
 │       ├── logger.py               Logger centralizado
 │       ├── schema.py               Schema pandera + reglas semanticas
-│       └── supabase_client.py      Cliente para Storage
+│       └── supabase_client.py      Cliente Storage (opcional)
 ├── sql/
 │   └── 01_create_tables.sql        DDL Postgres (ejecutar en Supabase SQL Editor)
 ├── scripts/
+│   ├── setup_supabase.py           Aplica DDL (y sube CSV a Storage si aplica)
 │   └── inyectar_errores.py         Genera dataset roto para demo en vivo
 ├── tests/
 │   └── test_validaciones.py        Tests unitarios (corren en GitHub Actions)
@@ -248,7 +257,7 @@ pytest tests/ -v
 3. **Mostrar Supabase** — Table Editor con las 3 tablas vacías
 4. **Abrir el Swagger** (`/docs`) — todos los endpoints visibles y testeables
 5. **Disparar `/pipeline/run`** desde el Swagger UI
-6. **Volver a Supabase** → Table Editor → mostrar las 7.032 filas en `clientes`
+6. **Volver a Supabase** → Table Editor → mostrar las 7.043 filas en `clientes`
 7. **Mostrar `carga_logs`** — auditoría de la ejecución
 8. **Disparar `/pipeline/ingest` con el dataset roto** (`scripts/inyectar_errores.py`)
 9. **Mostrar `clientes_rechazados`** — 8 errores detectados con motivo

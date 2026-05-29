@@ -140,20 +140,29 @@ curl $URL/rechazados?limit=10 | python -m json.tool
 
 ### 3.3 Verificar en Supabase
 
-1. Supabase → Table Editor → `clientes` → deberías ver 7.032 registros
-2. Tabla `carga_logs` → 1 registro con `estado='OK'` y `registros_insertados=7032`
+1. Supabase → Table Editor → `clientes` → deberías ver 7.043 registros
+2. Tabla `carga_logs` → 1 registro con `estado='OK'` y `registros_insertados=7043`
 
 ---
 
-## Parte 4 — CI/CD con GitHub Actions
+## Parte 4 — CI (GitHub Actions) y CD (Railway)
 
-Ya está configurado en `.github/workflows/ci.yml`. Cada vez que hagas push a `main`:
+**CI — automático.** Configurado en `.github/workflows/ci.yml`. Cada push a `main`
+dispara GitHub Actions que corre `pytest tests/`. Verás el badge verde en el commit
+cuando pasa.
 
-1. **GitHub Actions** corre los tests (`pytest tests/`)
-2. **Railway** detecta el push y redespliega automáticamente
+**CD — manual.** El deploy a Railway se hace con un comando desde la raíz del repo:
 
-Verás el badge verde en el commit cuando todo pasa. Si fallan los tests, Railway igualmente despliega (a menos que configures protección de rama). Para protección estricta:
+```bash
+railway up --detach --service telco-api   # con RAILWAY_API_TOKEN en el entorno
+```
 
+Se eligió deploy manual (gate humano) en vez de auto-deploy para controlar
+exactamente qué versión llega a producción. **Para activar auto-deploy** (deploy en
+cada push), basta conectar el repo de GitHub al servicio desde el dashboard de
+Railway (Settings → Source → Connect Repo); a partir de ahí Railway redespliega solo.
+
+Para exigir que los tests pasen antes de poder mergear:
 1. GitHub → Settings → Branches → Add rule para `main`
 2. "Require status checks to pass before merging" → seleccionar `test`
 
@@ -192,7 +201,7 @@ Verás el badge verde en el commit cuando todo pasa. Si fallan los tests, Railwa
 - [ ] Railway desplegado con dominio público funcionando
 - [ ] `/health` responde `"status": "healthy"`
 - [ ] `/pipeline/run` ejecuta y devuelve 200
-- [ ] Supabase Table Editor muestra 7.032 filas en `clientes`
+- [ ] Supabase Table Editor muestra 7.043 filas en `clientes`
 - [ ] GitHub Actions corriendo verde
 - [ ] README actualizado con la URL de Railway
 - [ ] Plan de demo ensayado al menos una vez

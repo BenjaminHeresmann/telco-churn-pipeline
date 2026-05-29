@@ -28,11 +28,11 @@
 
 ## 1. Resumen ejecutivo
 
-Este informe documenta el diseño, planificación e implementación de un pipeline de datos automatizado bajo principios DataOps para una compañía de telecomunicaciones que enfrenta un alto índice de abandono de clientes (churn). El proyecto utiliza el dataset público "Telco Customer Churn" (7.044 clientes, 21 variables) como base para construir un flujo de cuatro etapas (ingesta, limpieza/transformación, validación estructural y semántica, y carga a base de datos relacional) que deja la información lista para alimentar un modelo predictivo de IA.
+Este informe documenta el diseño, planificación e implementación de un pipeline de datos automatizado bajo principios DataOps para una compañía de telecomunicaciones que enfrenta un alto índice de abandono de clientes (churn). El proyecto utiliza el dataset público "Telco Customer Churn" (7.043 clientes, 21 variables) como base para construir un flujo de cuatro etapas (ingesta, limpieza/transformación, validación estructural y semántica, y carga a base de datos relacional) que deja la información lista para alimentar un modelo predictivo de IA.
 
 El valor para la organización es doble. Por una parte, el pipeline reduce el costo operativo de preparación de datos al automatizar las etapas que tradicionalmente se hacen manualmente con planillas, eliminando errores humanos y aumentando la frecuencia con que el negocio puede recalibrar su estrategia de retención. Por otra parte, sienta las bases para la Evaluación 3, en la que se entrenará un modelo de clasificación binaria sobre la variable Churn, permitiendo focalizar campañas de retención sobre los clientes con mayor probabilidad de abandono y, en consecuencia, proteger los ingresos recurrentes de la compañía.
 
-La solución se implementa con una **arquitectura cloud-native desacoplada**: el procesamiento corre como API REST en FastAPI desplegada en **Railway** (capa de cómputo), la persistencia usa PostgreSQL gestionado en **Supabase** (capa de datos), los archivos crudos viven en Supabase Storage, y el código se versiona en GitHub con CI/CD automatizado vía GitHub Actions. No es un monolito: cada componente escala, despliega y se mantiene de forma independiente, comunicándose mediante interfaces estándar (HTTPS REST y SQL sobre TLS).
+La solución se implementa con una **arquitectura cloud-native desacoplada**: el procesamiento corre como API REST en FastAPI desplegada en **Railway** (capa de cómputo), la persistencia usa PostgreSQL gestionado en **Supabase** (capa de datos), el dataset fuente viaja versionado en el repositorio (y opcionalmente puede leerse desde Supabase Storage), y el código se versiona en GitHub con **CI automatizado** (tests en cada push vía GitHub Actions) y **CD por comando** (`railway up`). No es un monolito: cada componente escala, despliega y se mantiene de forma independiente, comunicándose mediante interfaces estándar (HTTPS REST y SQL sobre TLS).
 
 El equipo está autorizado por el docente a operar con **dos integrantes** (Benjamín Heresmann y Diego Hernández), con división equitativa de responsabilidades técnicas pero defensa individual de la solución completa.
 
@@ -93,9 +93,10 @@ A pedido del docente, la solución NO es un monolito y debe quedar desplegada en
 
 | Servicio | Tecnología | Rol | Justificación |
 |---|---|---|---|
-| **Capa de datos** | Supabase (PostgreSQL 15 + Storage) | Almacena el CSV crudo y los datos curados | PostgreSQL gestionado con SSL out-of-the-box, UI web para inspección, Storage S3-compatible, plan gratis suficiente para el alcance académico |
+| **Capa de datos** | Supabase (PostgreSQL 17) | Persiste los datos curados, auditoría y rechazados | PostgreSQL gestionado con SSL out-of-the-box, UI web para inspección, plan gratis suficiente para el alcance académico. Incluye Storage S3-compatible (usado opcionalmente para el CSV fuente) |
 | **Capa de cómputo** | Railway (Docker + FastAPI) | Ejecuta el pipeline expuesto como API REST | Deploy directo desde Dockerfile, puerto dinámico, healthchecks nativos, escalado horizontal, plan gratis |
-| **CI/CD** | GitHub Actions | Valida y promueve cambios | Tests automáticos en cada push; integración nativa con GitHub |
+| **CI** | GitHub Actions | Valida cada cambio | Tests `pytest` automáticos en cada push; integración nativa con GitHub |
+| **CD** | `railway up` | Promueve a producción | Deploy manual por comando (gate humano); auto-deploy activable conectando el repo en Railway |
 
 ### 4.0.2 Por qué no monolito
 
@@ -133,19 +134,19 @@ La capa de cómputo es una API FastAPI con los siguientes endpoints (autodocumen
 
 Esta granularidad permite que sistemas externos (un job de Airflow, un script en cron, un dashboard web) consuman partes específicas del pipeline sin tener que importarlo como librería.
 
-### 4.0.4 Flujo de despliegue continuo
+### 4.0.4 Flujo de integración y despliegue
 
 ```
 Desarrollador hace git push a main
          │
          ▼
-GitHub Actions corre pytest (tests/)
-         │
-         ▼ (si OK)
-Railway detecta cambio en main (webhook automático)
+[CI] GitHub Actions corre pytest (tests/)  → badge verde si OK
          │
          ▼
-Railway rebuilda el Docker image desde Dockerfile
+Desarrollador ejecuta: railway up --service telco-api   (CD por comando)
+         │
+         ▼
+Railway rebuilda la imagen Docker desde Dockerfile (cache de capas)
          │
          ▼
 Railway hace rolling deploy (sin downtime)
@@ -157,7 +158,10 @@ Healthcheck en /health verifica que está operativo
 Tráfico se enruta al nuevo deploy
 ```
 
-Tiempo total desde push hasta producción: ~3-5 minutos.
+El paso de CI (tests) es automático en cada push; el paso de CD (deploy) es un
+comando explícito, lo que da un gate humano antes de promover a producción.
+Activar auto-deploy es trivial (conectar el repo en Railway) si se desea CD
+totalmente automático. Tiempo total push → producción: ~3-5 minutos.
 
 ### 4.0.5 Variables de entorno (Railway)
 
@@ -176,14 +180,14 @@ Toda la configuración sensible se inyecta como variables de entorno en Railway 
 
 ### 4.1 Etapa 1 — Ingesta automatizada
 
-**Objetivo:** capturar el CSV fuente desde **Supabase Storage** y depositarlo en una zona controlada (`data/raw/`) con trazabilidad temporal, sin transformar el contenido.
+**Objetivo:** capturar el CSV fuente y depositarlo en una zona controlada (`data/raw/`) con trazabilidad temporal, sin transformar el contenido.
 
-**Implementación:** script `src/ingesta.py` que descarga el CSV desde el bucket `telco-data` de Supabase Storage usando la librería `supabase-py`, lo deposita en `data/raw/` con un sufijo de timestamp (`telco_churn_raw_YYYYMMDD_HHMMSS.csv`), y registra en el log el número de filas, columnas y la ruta destino. La estrategia de fuentes tiene tres niveles de prioridad: (1) parámetro explícito si se pasa, (2) Supabase Storage si están seteadas `SUPABASE_URL` y `SUPABASE_KEY`, (3) archivo local fallback si está `SOURCE_CSV_PATH`. Esto permite que el mismo código corra en cloud y en desarrollo local sin modificaciones.
+**Implementación:** script `src/ingesta.py` que deposita el CSV en `data/raw/` con un sufijo de timestamp (`telco_churn_raw_YYYYMMDD_HHMMSS.csv`) y registra en el log el número de filas, columnas y la ruta destino. La estrategia de fuentes tiene cuatro niveles de prioridad: (1) parámetro explícito si se pasa, (2) **Supabase Storage** si están seteadas `SUPABASE_URL` y `SUPABASE_KEY`, (3) ruta local específica vía `SOURCE_CSV_PATH`, y (4) **fallback por defecto: el dataset versionado en el repo** (`data/source/telco_churn_source.csv`). En el despliegue MVP se usa el nivel (4): el dataset viaja dentro de la imagen Docker, por lo que la ingesta no depende de ningún servicio externo. El mismo código corre en cloud y en local sin modificaciones, y puede conmutarse a Supabase Storage solo agregando dos variables de entorno.
 
 **Decisiones técnicas y alternativas evaluadas:**
 
 - *Tipo de ingesta elegido:* **por lotes (batch)**. El dataset es un CSV estático, por lo que streaming/Kafka serían sobreingeniería injustificada.
-- *Por qué Supabase Storage y no FTP/S3:* Supabase Storage es S3-compatible bajo el capó, ya viene incluido en la suscripción gratuita y se administra desde la misma UI que la BD. Reduce la cantidad de servicios a gestionar.
+- *Por qué el dataset versionado en el repo (MVP) y no Supabase Storage:* para el alcance del caso (dataset estático único), versionar el CSV en el repo lo hace reproducible, lo incluye en la imagen Docker y elimina un punto de falla y de configuración en la demo. Supabase Storage (S3-compatible, incluido en el plan gratis) queda implementado y disponible como fuente alternativa para cuando el dato sea dinámico o de gran tamaño.
 - *Alternativa descartada — ingesta vía API REST:* el caso no expone API de la compañía, y un wrapper artificial sólo agregaría latencia. Si en el futuro la compañía expone un endpoint para extraer churn desde su CRM, basta con sustituir esta etapa.
 - *Trazabilidad:* el sufijo de timestamp permite mantener histórico de cargas y reproducibilidad. El logger escribe simultáneamente a consola (para demo) y a archivo (para auditoría).
 
@@ -246,15 +250,17 @@ Toda la configuración sensible se inyecta como variables de entorno en Railway 
 
 ### 4.4 Etapa 4 — Carga a base de datos
 
-**Objetivo:** persistir los registros validados en **Supabase PostgreSQL** respetando integridad referencial, dentro de transacciones que permitan rollback ante fallos, con conexión cifrada vía SSL.
+**Objetivo:** persistir los registros validados en **Supabase PostgreSQL** garantizando integridad de los datos, dentro de transacciones que permitan rollback ante fallos, con conexión cifrada vía SSL.
+
+**Nota sobre el modelo de datos y la "integridad referencial":** el dataset es analítico de una sola entidad (cada fila es un cliente con todos sus atributos planos), por lo que el modelo es de **tabla única desnormalizada** (`clientes`), sin claves foráneas entre entidades. No habría integridad *referencial* que imponer porque no hay relaciones entre tablas de negocio. La integridad de datos se garantiza con otros mecanismos a nivel de motor: **clave primaria** (`customer_id` único e irrepetible), **restricciones CHECK** (rangos de `tenure`, valores permitidos de `gender`, `contract`, `internet_service`, `monthly_charges >= 0`, etc.), **NOT NULL** en columnas obligatorias y **transacciones atómicas**. Las tablas `carga_logs` y `clientes_rechazados` son de auditoría independiente (relación lógica por fecha/timestamp, no por FK), lo que simplifica las recargas full-refresh. Si el caso evolucionara a un modelo multi-entidad (ej. separar `cliente`, `contrato`, `servicio`), ahí sí se introducirían claves foráneas y su integridad referencial.
 
 **Implementación:** script `src/carga_bd.py` que:
 
-1. Construye la conexión con SQLAlchemy + psycopg2 a partir del `DATABASE_URL` que entrega Supabase, o ensambla la URL desde variables individuales forzando `sslmode=require`.
+1. Construye la conexión con SQLAlchemy + psycopg2 a partir del `DATABASE_URL` que entrega Supabase, o ensambla la URL desde variables individuales forzando `sslmode=require`. El engine se cachea (singleton) para reutilizar el pool de conexiones en todas las requests, evitando agotar el límite del pooler de Supabase.
 2. Renombra las columnas del DataFrame al `snake_case` esperado por la tabla `clientes`.
-3. Inserta los registros en bloques de 500 (`chunksize=500`) usando `to_sql` con `method="multi"` para optimizar throughput.
-4. Toda la inserción ocurre dentro de un `engine.begin()` que garantiza COMMIT/ROLLBACK atómico.
-5. Si la etapa 3 generó rechazados, los inserta en `clientes_rechazados` con el payload serializado a JSONB.
+3. **Carga full-refresh idempotente:** dentro de una transacción, hace `TRUNCATE` de `clientes` y `clientes_rechazados` y luego inserta en bloques de 500 (`chunksize=500`) con `to_sql(method="multi")`. Reejecutar el pipeline produce siempre el mismo estado final (reproducibilidad DataOps), sin errores de clave duplicada. El histórico de auditoría (`carga_logs`) nunca se trunca.
+4. Toda la operación TRUNCATE+INSERT ocurre dentro de un `engine.begin()` que garantiza COMMIT/ROLLBACK atómico: si el insert falla, la tabla queda intacta.
+5. Si la etapa 3 generó rechazados (emparejados por timestamp con el archivo validado de la misma corrida), los inserta en `clientes_rechazados` con el payload serializado a JSONB y el motivo del rechazo.
 6. Registra cada ejecución en `carga_logs` con archivo origen, conteos, duración y estado (OK/ERROR/PARCIAL).
 
 **Decisiones técnicas y alternativas evaluadas:**
@@ -330,38 +336,55 @@ El pipeline maneja datos personales bajo el alcance de la **Ley 19.628 de Protec
 
 ## 6. Documentación del código y evidencias
 
-### 6.1 Repositorio GitHub
+### 6.1 Recursos en producción
 
-URL del repositorio: `https://github.com/<usuario>/telco-churn-pipeline` *(a publicar tras evaluación)*
+| Recurso | Enlace |
+|---|---|
+| **Repositorio GitHub (público)** | https://github.com/BenjaminHeresmann/telco-churn-pipeline |
+| **API en producción (Railway)** | https://telco-api-production-e466.up.railway.app |
+| **Documentación interactiva (Swagger)** | https://telco-api-production-e466.up.railway.app/docs |
+| **Health check** | https://telco-api-production-e466.up.railway.app/health |
+| **Base de datos** | PostgreSQL 17 gestionado en Supabase (proyecto `telco-churn`) |
+| **CI (GitHub Actions)** | Estado verde en `.github/workflows/ci.yml` (pytest en cada push) |
 
-Estructura:
+Estructura del repositorio:
 
 ```
 telco-churn-pipeline/
 ├── README.md                Guía principal del proyecto
-├── Dockerfile               Imagen del pipeline
-├── docker-compose.yml       Orquestación Postgres + pipeline
+├── Dockerfile               Imagen para Railway (sirve FastAPI con uvicorn)
+├── railway.toml             Config de build/deploy/healthcheck de Railway
+├── Procfile                 Comando de arranque alternativo
 ├── requirements.txt         Dependencias Python
 ├── .env.example             Plantilla de variables sensibles
-├── .gitignore               Excluye datos, logs, credenciales
-├── data/                    Zonas raw/clean/validated/rejected
+├── .gitignore / .railwayignore  Exclusiones de git y de deploy
+├── .github/workflows/ci.yml CI: pytest en cada push
+├── data/
+│   ├── source/              Dataset fuente versionado (telco_churn_source.csv)
+│   └── raw|clean|validated|rejected/   Zonas de trabajo (efímeras)
 ├── src/
+│   ├── api.py               FastAPI: endpoints REST de cada etapa + orquestador
 │   ├── ingesta.py           Etapa 1
 │   ├── limpieza.py          Etapa 2
 │   ├── validacion.py        Etapa 3
-│   ├── carga_bd.py          Etapa 4
-│   ├── run_pipeline.py      Orquestador
+│   ├── carga_bd.py          Etapa 4 (idempotente, engine singleton)
+│   ├── run_pipeline.py      Orquestador CLI
 │   └── utils/
 │       ├── logger.py        Logger centralizado
-│       └── schema.py        Schema pandera + reglas semánticas
+│       ├── schema.py        Schema pandera + reglas semánticas
+│       └── supabase_client.py  Cliente Storage (opcional)
 ├── sql/
 │   └── 01_create_tables.sql DDL Postgres
+├── scripts/
+│   ├── setup_supabase.py    Aplica DDL en Supabase
+│   └── inyectar_errores.py  Dataset roto para demo de rechazos
 ├── tests/
-│   └── test_validaciones.py 6 tests unitarios
+│   └── test_validaciones.py 6 tests unitarios (corren en CI)
 └── docs/
     ├── informe_tecnico.md
     ├── diagramas.md
-    └── presentacion.md
+    ├── presentacion.md
+    └── DEPLOY.md
 ```
 
 ### 6.2 Evidencias de ejecución
@@ -369,15 +392,25 @@ telco-churn-pipeline/
 **Logs de la primera ejecución exitosa (extracto):**
 
 ```
-2026-05-26 20:21:12 | INFO | ingesta     | Iniciando ingesta desde 02_Base_WA_Fn-UseC_-Telco-Customer-Churn.csv
-2026-05-26 20:21:12 | INFO | ingesta     | Ingesta completada | filas=7043 | columnas=21
-2026-05-26 20:21:26 | INFO | limpieza    | TotalCharges: 11 celdas vacias convertidas a NaN
-2026-05-26 20:21:26 | INFO | limpieza    | Limpieza completada | filas=7043 -> 7043 | nulos=11 | duplicados=0
-2026-05-26 20:21:28 | INFO | validacion  | Validacion estructural: 7032 ok, 11 rechazados
-2026-05-26 20:21:28 | INFO | validacion  | Validacion semantica:  7032 ok, 0 rechazados
-2026-05-26 20:21:30 | INFO | carga_bd    | Insertados 7032 registros en clientes
-2026-05-26 20:21:30 | INFO | orquestador | FIN PIPELINE | duracion total = ~3 seg
+2026-05-29 19:03:01 | INFO | ingesta     | Ingesta desde dataset versionado en repo: data/source/telco_churn_source.csv
+2026-05-29 19:03:01 | INFO | ingesta     | Ingesta completada | filas=7043 | columnas=21
+2026-05-29 19:03:01 | INFO | limpieza    | TotalCharges: 11 celdas vacias convertidas a NaN
+2026-05-29 19:03:01 | INFO | limpieza    | TotalCharges: 11 NaN imputados con 0 para clientes con tenure=0 (recien registrados)
+2026-05-29 19:03:01 | INFO | limpieza    | Limpieza completada | filas=7043 -> 7043 | nulos=0 | duplicados=0
+2026-05-29 19:03:01 | INFO | validacion  | Validacion estructural: 7043 ok, 0 rechazados
+2026-05-29 19:03:01 | INFO | validacion  | Validacion semantica:  7043 ok, 0 rechazados
+2026-05-29 19:03:03 | INFO | carga_bd    | Tablas de estado vaciadas (full-refresh)
+2026-05-29 19:03:03 | INFO | carga_bd    | Insertados 7043 registros en clientes
+2026-05-29 19:03:03 | INFO | orquestador | FIN PIPELINE | duracion total = ~2 seg
 ```
+
+> Nota sobre los 11 registros con `TotalCharges` vacío: son clientes con `tenure=0`
+> (recién registrados, sin facturación acumulada todavía). La limpieza los imputa
+> con 0 de forma justificada, por lo que los 7.043 registros pasan la validación.
+> Si en cambio se ingesta un dataset con errores reales (ver `scripts/inyectar_errores.py`),
+> el pipeline los rechaza: ej. `Validacion estructural: 45 ok, 5 rechazados` y
+> `Validacion semantica: 42 ok, 3 rechazados`, quedando los 8 inválidos en
+> `data/rejected/` y auditados en la tabla `clientes_rechazados`.
 
 **Capturas a incluir en el PDF final:**
 1. Terminal con la ejecución completa del orquestador.

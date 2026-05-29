@@ -231,7 +231,7 @@ Persistencia: tabla `carga_logs`. Alertas vía log `WARNING`. Próximo paso: das
 ### Demo paso 3 (1.5 min) — "Ejecutamos el pipeline completo desde la nube"
 - En Swagger: `POST /pipeline/run` → "Execute"
 - Esperar ~10 seg → mostrar respuesta con 4 etapas OK
-- Tab Supabase → refresh Table Editor → mostrar 7.032 filas en `clientes`
+- Tab Supabase → refresh Table Editor → mostrar 7.043 filas en `clientes`
 - Tab Supabase → tabla `carga_logs` → mostrar el registro de la ejecución
 
 ### Demo paso 4 (1.5 min) — "Detección de errores en vivo"

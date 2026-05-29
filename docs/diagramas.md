@@ -22,7 +22,7 @@ flowchart TB
 
     subgraph SUPA["Supabase - Capa de datos"]
         STO[(Storage bucket<br/>telco-data<br/>CSVs fuente)]
-        DB[(PostgreSQL 15<br/>clientes<br/>carga_logs<br/>clientes_rechazados)]
+        DB[(PostgreSQL 17<br/>clientes<br/>carga_logs<br/>clientes_rechazados)]
         UI[Dashboard Web<br/>SQL Editor + Table Editor]
     end
 
