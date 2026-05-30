@@ -18,7 +18,7 @@
 
     /* ---------- Tokens ---------- */
     :root{
-      --ink:#0F172A; --ink2:#334155; --muted:#64748B; --faint:#94A3B8;
+      --ink:#0F172A; --ink2:#2B3A4F; --muted:#475569; --faint:#64748B;
       --line:#E6EBF2; --soft:#F8FAFC; --soft2:#F1F5F9; --white:#fff;
       --brand:#15406b; --brand-d:#0C2A47; --accent:#2563EB; --accent-l:#EAF1FB;
       --green:#0E9F6E; --green-l:#E7F8F0; --amber:#B7791F; --amber-l:#FEF6E7;
@@ -32,7 +32,7 @@
     /* ---------- Base ---------- */
     .reveal{font-family:'Inter',system-ui,Arial,sans-serif;font-size:26px;color:var(--ink);font-weight:400;-webkit-font-smoothing:antialiased;}
     .reveal .slides{text-align:left;}
-    .reveal section{height:100%;box-sizing:border-box;padding:58px 70px 50px;display:flex;flex-direction:column;}
+    .reveal section{height:100%;box-sizing:border-box;padding:56px 70px 50px;display:flex;flex-direction:column;}
     .reveal h1{font-family:'Sora',sans-serif;font-weight:700;font-size:1.5em;line-height:1.08;color:var(--brand);letter-spacing:-.015em;margin:0 0 .12em;}
     .reveal h2{font-family:'Sora',sans-serif;font-weight:600;font-size:1.04em;color:var(--brand);margin:0 0 .3em;letter-spacing:-.01em;}
     .reveal h3{font-family:'Sora',sans-serif;font-weight:600;font-size:.66em;color:var(--accent);margin:0 0 .35em;letter-spacing:.005em;}
@@ -43,7 +43,7 @@
     .reveal ol{margin:0;padding-left:1.2em;} .reveal ol li{margin:.34em 0;}
     .reveal strong{color:var(--brand);font-weight:700;}
     .reveal em{color:var(--muted);font-style:normal;}
-    .reveal small{font-size:.66em;color:var(--muted);line-height:1.35;}
+    .reveal small{font-size:.74em;color:var(--muted);line-height:1.38;}
     code{font-family:'JetBrains Mono','Consolas',monospace;background:var(--soft2);color:#0B3D6B;padding:1px 7px;border-radius:6px;font-size:.84em;border:1px solid var(--line);}
 
     /* ---------- Iconos SVG (línea) ---------- */
@@ -52,7 +52,7 @@
 
     /* ---------- Cabecera de slide ---------- */
     .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
-    .kicker{display:inline-flex;align-items:center;gap:9px;font-size:.46em;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase;}
+    .kicker{display:inline-flex;align-items:center;gap:9px;font-size:.52em;font-weight:700;letter-spacing:.15em;color:var(--accent);text-transform:uppercase;}
     .kicker .ic{width:17px;height:17px;color:var(--accent);}
     .role{display:inline-flex;align-items:center;gap:7px;font-size:.4em;font-weight:700;letter-spacing:.05em;color:#fff;background:linear-gradient(135deg,var(--brand),var(--accent));padding:6px 14px;border-radius:30px;text-transform:uppercase;box-shadow:var(--sh-sm);}
     .role.diego{background:linear-gradient(135deg,#0E7C56,var(--green));}
@@ -129,6 +129,49 @@
     .brandbar{position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,var(--brand),var(--accent) 60%,var(--green));z-index:5;}
     .footmark{position:absolute;left:70px;bottom:18px;font-size:12px;color:var(--faint);font-weight:500;letter-spacing:.02em;}
     .footmark b{color:var(--accent);font-weight:700;}
+
+    /* ===== Arquitectura nativa (3 servicios) ===== */
+    .arch{flex:1;display:flex;flex-direction:column;justify-content:center;gap:20px;}
+    .arch-flow{display:flex;align-items:stretch;gap:2px;}
+    .svc{flex:1;background:#fff;border:1px solid var(--line);border-top:5px solid var(--accent);border-radius:16px;padding:22px 24px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--sh-md);}
+    .svc.gh{border-top-color:#1D4ED8;background:linear-gradient(180deg,#EEF2FB,#fff 62%);}
+    .svc.rw{border-top-color:var(--brand);background:linear-gradient(180deg,#EAF1F9,#fff 62%);}
+    .svc.sb{border-top-color:var(--green);background:linear-gradient(180deg,var(--green-l),#fff 62%);}
+    .svc .svc-h{display:flex;align-items:center;gap:13px;}
+    .svc .svc-h .ic{width:36px;height:36px;}
+    .svc .svc-t{font-family:'Sora',sans-serif;font-weight:700;font-size:1.04em;color:var(--brand);line-height:1;}
+    .svc .svc-s{font-size:.5em;color:var(--accent);font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin-top:4px;}
+    .svc ul{margin:4px 0 0;} .svc li{font-size:.72em;margin:.34em 0;padding-left:1.05em;line-height:1.3;}
+    .svc li::before{top:.46em;width:7px;height:7px;}
+    .conn{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:0 0 96px;gap:7px;}
+    .conn .lbl{font-size:.46em;font-weight:700;color:var(--accent);background:var(--accent-l);border:1px solid #cfe0f7;padding:4px 10px;border-radius:20px;white-space:nowrap;font-family:'JetBrains Mono',monospace;}
+    .conn .ar{width:70px;height:26px;color:var(--brand);fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+    .arch-ends{display:flex;gap:16px;}
+    .endcard{flex:1;display:flex;align-items:center;gap:13px;background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:14px 20px;}
+    .endcard .ic{width:26px;height:26px;color:var(--brand);flex-shrink:0;}
+    .endcard b{font-family:'Sora';color:var(--brand);font-size:.78em;}
+    .endcard span{font-size:.66em;color:var(--muted);}
+
+    /* ===== Carta Gantt nativa ===== */
+    .gantt{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 28px 24px;box-shadow:var(--sh-md);
+      display:grid;grid-template-columns:215px repeat(8,1fr);row-gap:12px;align-items:center;position:relative;}
+    .gantt .gcorner{grid-row:1;grid-column:1;}
+    .gantt .day{grid-row:1;text-align:center;font-size:.5em;font-weight:600;color:var(--muted);padding-bottom:9px;border-bottom:2px solid var(--line);}
+    .gantt .day b{display:block;font-family:'Sora';font-weight:700;font-size:1.4em;color:var(--brand);line-height:1.15;}
+    .gantt .day.we b{color:var(--faint);}
+    .gantt .glabel{grid-column:1;display:flex;align-items:center;gap:11px;font-weight:700;font-size:.66em;color:var(--ink2);}
+    .gantt .glabel .gd{width:14px;height:14px;border-radius:4px;flex-shrink:0;}
+    .gantt .gridlines{grid-column:2/10;z-index:0;align-self:stretch;border-radius:6px;
+      background:repeating-linear-gradient(90deg,rgba(148,163,184,.09) 0 12.5%,transparent 12.5% 25%);}
+    .gantt .bar{height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+      font-size:.5em;font-weight:700;color:#fff;box-shadow:var(--sh-sm);z-index:1;white-space:nowrap;
+      background-image:linear-gradient(135deg,rgba(255,255,255,.18),transparent 60%);}
+    .mstones{display:flex;gap:13px;margin-top:20px;}
+    .ms{flex:1;display:flex;align-items:center;gap:11px;background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:12px 17px;}
+    .ms .ic{width:23px;height:23px;color:var(--accent);flex-shrink:0;}
+    .ms b{font-family:'Sora';color:var(--brand);font-size:.62em;display:block;line-height:1.1;}
+    .ms span{font-size:.56em;color:var(--muted);}
+    .ms.crit{border-color:#f0c8c1;background:var(--red-l);} .ms.crit .ic{color:var(--red);} .ms.crit b{color:var(--red);}
   </style>
 </head>
 <body>
@@ -261,13 +304,29 @@
       <div class="head"><span class="kicker"><svg class="ic"><use href="#ic-cloud"/></svg> Arquitectura · petición del docente</span><span class="role diego">Diego</span></div>
       <h1>Arquitectura cloud desacoplada <span style="font-family:Inter;font-weight:600;font-size:.5em;color:var(--green)">no monolito</span></h1>
       <div class="body">
-        <figure class="dia" style="margin-bottom:14px"><img src="../img/arquitectura.png" style="max-height:268px"></figure>
-        <div class="pills" style="justify-content:center">
-          <span class="pill"><svg class="ic"><use href="#ic-git"/></svg> GitHub · repo + CI</span>
-          <span class="pill b"><svg class="ic"><use href="#ic-cloud"/></svg> Railway · FastAPI + Docker</span>
-          <span class="pill g"><svg class="ic"><use href="#ic-db"/></svg> Supabase · PostgreSQL 17 + SSL</span>
+        <div class="arch">
+          <div class="arch-flow">
+            <div class="svc gh">
+              <div class="svc-h"><svg class="ic" style="color:#1D4ED8"><use href="#ic-git"/></svg><div><div class="svc-t">GitHub</div><div class="svc-s">Código · CI</div></div></div>
+              <ul><li>Repositorio + <code>data/source</code></li><li>GitHub Actions · <strong>pytest</strong> en cada push</li></ul>
+            </div>
+            <div class="conn"><span class="lbl">railway up</span><svg class="ar" viewBox="0 0 70 26"><path d="M2 13h60m-11-9 11 9-11 9"/></svg></div>
+            <div class="svc rw">
+              <div class="svc-h"><svg class="ic" style="color:var(--brand)"><use href="#ic-cloud"/></svg><div><div class="svc-t">Railway</div><div class="svc-s">Cómputo</div></div></div>
+              <ul><li>FastAPI + <strong>Docker</strong></li><li>API REST · <strong>4 etapas</strong></li><li>Healthcheck <code>/health</code></li></ul>
+            </div>
+            <div class="conn"><span class="lbl">SQL · SSL</span><svg class="ar" viewBox="0 0 70 26"><path d="M2 13h60m-11-9 11 9-11 9"/></svg></div>
+            <div class="svc sb">
+              <div class="svc-h"><svg class="ic" style="color:var(--green)"><use href="#ic-db"/></svg><div><div class="svc-t">Supabase</div><div class="svc-s">Datos</div></div></div>
+              <ul><li><strong>PostgreSQL 17</strong> · SSL forzado</li><li><code>clientes</code> · <code>carga_logs</code></li><li><code>clientes_rechazados</code></li></ul>
+            </div>
+          </div>
+          <div class="arch-ends">
+            <div class="endcard"><svg class="ic"><use href="#ic-git"/></svg><div><b>Equipo</b> <span>· git push → GitHub</span></div></div>
+            <div class="endcard"><svg class="ic"><use href="#ic-play"/></svg><div><b>Usuarios</b> <span>· Swagger / curl / cron → HTTP REST</span></div></div>
+          </div>
+          <p class="center" style="margin:2px 0 0"><em>Tres servicios independientes: si Railway cae, la BD sigue; se escala la API sin tocar los datos.</em></p>
         </div>
-        <p class="center" style="margin-top:14px"><em>Tres servicios independientes: si Railway cae, la BD sigue; se escala la API sin tocar los datos.</em></p>
       </div>
       <div class="footmark">Pipeline DataOps Telco Churn · <b>ITY1101</b> Duoc UC</div>
     </section>
@@ -278,7 +337,7 @@
       <div class="head"><span class="kicker"><svg class="ic"><use href="#ic-flow"/></svg> Ciclo de vida del dato</span><span class="role ambos">Ambos</span></div>
       <h1>El pipeline: 4 etapas desacopladas</h1>
       <div class="body"><div class="cols c">
-        <div class="col center" style="flex:.62"><figure class="dia"><img src="../img/pipeline.png" style="max-height:455px"></figure></div>
+        <div class="col center" style="flex:.6"><figure class="dia" style="padding:18px"><img src="../img/pipeline_slide.png" alt="Diagrama del pipeline: CSV fuente → Ingesta → Limpieza → Validación → válidos/rechazados → Carga BD → Supabase PostgreSQL 17" style="max-height:452px"></figure></div>
         <div class="col">
           <p>Cada etapa es un <strong>endpoint REST independiente</strong>:</p>
           <ul style="font-size:.86em">
@@ -321,20 +380,43 @@
       <div class="brandbar"></div>
       <div class="head"><span class="kicker"><svg class="ic"><use href="#ic-calendar"/></svg> Planificación · entregables y fechas</span><span class="role diego">Diego</span></div>
       <h1>WBS y Carta Gantt</h1>
-      <div class="body"><div class="cols c">
-        <div class="col" style="flex:1.25"><figure class="dia"><img src="../img/gantt.png" style="max-height:330px"></figure></div>
-        <div class="col">
-          <table class="t" style="font-size:.56em">
-            <tr><th>Fecha</th><th>Entregable</th></tr>
-            <tr><td>26–28 may</td><td>Setup + DDL + pipeline (4 etapas)</td></tr>
-            <tr><td>29 may</td><td>Deploy cloud (Supabase + Railway)</td></tr>
-            <tr><td>29 may</td><td>Auditoría + tests E2E</td></tr>
-            <tr><td>30 may–1 jun</td><td>Informe, diagramas, slides</td></tr>
-            <tr><td>2 jun</td><td><strong>Entrega + defensa</strong></td></tr>
-          </table>
-          <p style="margin-top:12px"><small><svg class="ic" style="width:14px;height:14px;color:var(--accent);vertical-align:-2px"><use href="#ic-flag"/></svg> Hitos: H1 stack operativo · H2 pipeline end-to-end · H3 documentación y demo.</small></p>
+      <div class="body">
+        <div class="gantt">
+          <div class="gcorner"></div>
+          <div class="day"><b>26</b>may</div>
+          <div class="day"><b>27</b>may</div>
+          <div class="day"><b>28</b>may</div>
+          <div class="day"><b>29</b>may</div>
+          <div class="day"><b>30</b>may</div>
+          <div class="day"><b>31</b>may</div>
+          <div class="day"><b>1</b>jun</div>
+          <div class="day"><b>2</b>jun</div>
+
+          <div class="gridlines" style="grid-row:2 / span 5"></div>
+
+          <div class="glabel" style="grid-row:2"><span class="gd" style="background:#1D4ED8"></span>Setup &amp; DDL</div>
+          <div class="bar" style="grid-row:2;grid-column:2/4;background:#1D4ED8">Repo · Docker · DDL</div>
+
+          <div class="glabel" style="grid-row:3"><span class="gd" style="background:var(--brand)"></span>Pipeline · 4 etapas</div>
+          <div class="bar" style="grid-row:3;grid-column:4/8;background:var(--brand)">Ingesta → Limpieza → Validación → Carga</div>
+
+          <div class="glabel" style="grid-row:4"><span class="gd" style="background:var(--green)"></span>Cloud + Auditoría</div>
+          <div class="bar" style="grid-row:4;grid-column:5/7;background:var(--green)">Deploy + E2E</div>
+
+          <div class="glabel" style="grid-row:5"><span class="gd" style="background:var(--violet)"></span>Documentación</div>
+          <div class="bar" style="grid-row:5;grid-column:6/9;background:var(--violet)">Informe · diagramas · slides</div>
+
+          <div class="glabel" style="grid-row:6"><span class="gd" style="background:var(--red)"></span>Entrega</div>
+          <div class="bar" style="grid-row:6;grid-column:9/10;background:var(--red)">Defensa</div>
         </div>
-      </div></div>
+
+        <div class="mstones">
+          <div class="ms"><svg class="ic"><use href="#ic-flag"/></svg><div><b>H1 · Stack operativo</b><span>28 may</span></div></div>
+          <div class="ms"><svg class="ic"><use href="#ic-flag"/></svg><div><b>H2 · Pipeline end-to-end</b><span>31 may</span></div></div>
+          <div class="ms"><svg class="ic"><use href="#ic-flag"/></svg><div><b>H3 · Documentación + demo</b><span>1 jun</span></div></div>
+          <div class="ms crit"><svg class="ic"><use href="#ic-play"/></svg><div><b>Defensa</b><span>2 jun</span></div></div>
+        </div>
+      </div>
       <div class="footmark">Pipeline DataOps Telco Churn · <b>ITY1101</b> Duoc UC</div>
     </section>
 
