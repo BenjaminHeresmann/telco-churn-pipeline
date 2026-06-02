@@ -136,6 +136,7 @@ telco-churn-pipeline/
 ├── sql/
 │   └── 01_create_tables.sql        DDL Postgres (ejecutar en Supabase SQL Editor)
 ├── scripts/
+│   ├── gen_diagramas.py            Renderiza los diagramas Mermaid a PNG
 │   ├── setup_supabase.py           Aplica DDL (y sube CSV a Storage si aplica)
 │   └── inyectar_errores.py         Genera dataset roto para demo en vivo
 ├── tests/
