@@ -58,6 +58,18 @@ CREATE TABLE IF NOT EXISTS clientes_rechazados (
     fecha_rechazo          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ============================================================
+-- Seguridad: Row-Level Security (RLS)
+-- Sin RLS, las tablas del esquema public quedan accesibles via la API REST
+-- de Supabase (PostgREST) a cualquiera con la anon key. Se habilita RLS para
+-- cerrar ese acceso. El backend se conecta como el rol dueno (postgres), que
+-- IGNORA RLS, por lo que la carga/lectura del pipeline siguen funcionando.
+-- Sin politicas permisivas => el rol anon/authenticated no tiene acceso.
+-- ============================================================
+ALTER TABLE clientes            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE carga_logs          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clientes_rechazados ENABLE ROW LEVEL SECURITY;
+
 -- Roles y permisos (ejemplo de control de acceso para el plan de seguridad)
 -- Estos comandos se ejecutan opcionalmente con un superusuario
 -- CREATE ROLE telco_analista LOGIN PASSWORD 'cambiar';
