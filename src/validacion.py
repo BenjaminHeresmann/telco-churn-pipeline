@@ -88,11 +88,12 @@ def _validar_semantico(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return df.drop(indices_invalidos), rechazados
 
 
-def validar(ruta_clean: Path | None = None) -> tuple[Path, Path | None]:
+def validar(ruta_clean: Path | None = None) -> tuple[Path, Path | None, dict]:
     """Ejecuta validacion estructural y semantica.
 
-    Devuelve (ruta_validados, ruta_rechazados). ruta_rechazados es None si
-    todo paso correctamente.
+    Devuelve (ruta_validados, ruta_rechazados, detalles). ruta_rechazados es
+    None si todo paso correctamente; detalles incluye filas validas/rechazadas,
+    el desglose estructural vs semantico y la tasa de validez.
     """
     ruta_clean = ruta_clean or _ultimo_clean()
     log.info("Iniciando validacion desde %s", ruta_clean.name)
@@ -131,13 +132,24 @@ def validar(ruta_clean: Path | None = None) -> tuple[Path, Path | None]:
         n_inicial, len(validos_final), pct_ok, len(rechazados_total),
     )
 
-    return ruta_validados, ruta_rechazados
+    detalles = {
+        "archivo_entrada": ruta_clean.name,
+        "archivo_validados": ruta_validados.name,
+        "archivo_rechazados": ruta_rechazados.name if ruta_rechazados else None,
+        "filas_entrada": int(n_inicial),
+        "filas_validas": int(len(validos_final)),
+        "filas_rechazadas": int(len(rechazados_total)),
+        "rechazos_estructurales": int(len(rechazados_estr)),
+        "rechazos_semanticos": int(len(rechazados_sem)),
+        "tasa_validez_pct": round(pct_ok, 2),
+    }
+    return ruta_validados, ruta_rechazados, detalles
 
 
 if __name__ == "__main__":
     try:
-        ruta_ok, ruta_ko = validar()
-        log.info("OK validacion. Validados=%s, Rechazados=%s", ruta_ok, ruta_ko)
+        ruta_ok, ruta_ko, det = validar()
+        log.info("OK validacion. Validados=%s, Rechazados=%s | %s", ruta_ok, ruta_ko, det)
         sys.exit(0)
     except Exception as exc:
         log.error("Fallo en validacion: %s", exc, exc_info=True)

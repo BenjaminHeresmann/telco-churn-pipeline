@@ -211,9 +211,13 @@ def cargar(ruta_validados: Path | None = None) -> dict:
     )
 
     kpi = {
-        "registros_leidos": n_leidos,
-        "registros_insertados": n_insertados,
-        "registros_rechazados_auditados": n_rechazados,
+        "archivo_entrada": ruta_validados.name,
+        "tabla_destino": "clientes",
+        "modo_carga": "full-refresh idempotente (TRUNCATE + INSERT transaccional)",
+        "registros_leidos": int(n_leidos),
+        "registros_insertados": int(n_insertados),
+        "registros_rechazados_auditados": int(n_rechazados),
+        "archivo_rechazados_auditado": ruta_rechazados.name if ruta_rechazados else None,
         "duracion_segundos": duracion,
         "estado": estado,
     }

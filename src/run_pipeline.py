@@ -29,26 +29,16 @@ def main() -> int:
 
     try:
         t0 = time.perf_counter()
-        ruta_raw = ingesta.ingestar()
-        kpis["ingesta"] = {
-            "duracion_seg": round(time.perf_counter() - t0, 3),
-            "archivo_salida": ruta_raw.name,
-        }
+        ruta_raw, det = ingesta.ingestar()
+        kpis["ingesta"] = {"duracion_seg": round(time.perf_counter() - t0, 3), **det}
 
         t0 = time.perf_counter()
-        ruta_clean = limpieza.limpiar(ruta_raw)
-        kpis["limpieza"] = {
-            "duracion_seg": round(time.perf_counter() - t0, 3),
-            "archivo_salida": ruta_clean.name,
-        }
+        ruta_clean, det = limpieza.limpiar(ruta_raw)
+        kpis["limpieza"] = {"duracion_seg": round(time.perf_counter() - t0, 3), **det}
 
         t0 = time.perf_counter()
-        ruta_valid, ruta_rech = validacion.validar(ruta_clean)
-        kpis["validacion"] = {
-            "duracion_seg": round(time.perf_counter() - t0, 3),
-            "archivo_validados": ruta_valid.name,
-            "archivo_rechazados": ruta_rech.name if ruta_rech else None,
-        }
+        ruta_valid, ruta_rech, det = validacion.validar(ruta_clean)
+        kpis["validacion"] = {"duracion_seg": round(time.perf_counter() - t0, 3), **det}
 
         t0 = time.perf_counter()
         kpis_carga = carga_bd.cargar(ruta_valid)

@@ -49,8 +49,12 @@ def _categorizar_tenure(meses: int) -> str:
     return "73+"
 
 
-def limpiar(ruta_raw: Path | None = None) -> Path:
-    """Aplica limpieza y transformacion. Devuelve la ruta del CSV limpio."""
+def limpiar(ruta_raw: Path | None = None) -> tuple[Path, dict]:
+    """Aplica limpieza y transformacion.
+
+    Devuelve (ruta_csv_limpio, detalles) con archivo de entrada/salida,
+    filas antes/despues y las transformaciones aplicadas.
+    """
     ruta_raw = ruta_raw or _ultimo_raw()
     log.info("Iniciando limpieza desde %s", ruta_raw.name)
 
@@ -96,13 +100,28 @@ def limpiar(ruta_raw: Path | None = None) -> Path:
     df.to_csv(ruta_destino, index=False)
     log.info("Archivo limpio guardado en %s", ruta_destino.name)
 
-    return ruta_destino
+    detalles = {
+        "archivo_entrada": ruta_raw.name,
+        "archivo_salida": ruta_destino.name,
+        "filas_entrada": int(n_inicial),
+        "filas_salida": int(n_final),
+        "duplicados_eliminados": int(duplicados),
+        "totalcharges_vacios": int(nulos_total_charges),
+        "imputados_tenure0": int(n_imputados),
+        "transformaciones": [
+            "TotalCharges -> numerico",
+            "Yes/No -> booleano",
+            "tenure_group (feature derivada)",
+            "dedup por customerID",
+        ],
+    }
+    return ruta_destino, detalles
 
 
 if __name__ == "__main__":
     try:
-        ruta = limpiar()
-        log.info("OK limpieza. Archivo disponible en %s", ruta)
+        ruta, det = limpiar()
+        log.info("OK limpieza. Archivo disponible en %s | %s", ruta, det)
         sys.exit(0)
     except Exception as exc:
         log.error("Fallo en limpieza: %s", exc, exc_info=True)

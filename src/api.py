@@ -128,12 +128,12 @@ def health():
 def endpoint_ingest():
     t0 = time.perf_counter()
     try:
-        ruta = ingesta.ingestar()
+        _, det = ingesta.ingestar()
         return RespuestaEtapa(
             etapa="ingesta",
             estado="OK",
             duracion_segundos=round(time.perf_counter() - t0, 3),
-            detalles={"archivo_salida": ruta.name},
+            detalles=det,
         )
     except Exception as exc:
         log.error("Fallo ingesta: %s", exc, exc_info=True)
@@ -144,12 +144,12 @@ def endpoint_ingest():
 def endpoint_clean():
     t0 = time.perf_counter()
     try:
-        ruta = limpieza.limpiar()
+        _, det = limpieza.limpiar()
         return RespuestaEtapa(
             etapa="limpieza",
             estado="OK",
             duracion_segundos=round(time.perf_counter() - t0, 3),
-            detalles={"archivo_salida": ruta.name},
+            detalles=det,
         )
     except Exception as exc:
         log.error("Fallo limpieza: %s", exc, exc_info=True)
@@ -160,15 +160,12 @@ def endpoint_clean():
 def endpoint_validate():
     t0 = time.perf_counter()
     try:
-        ruta_ok, ruta_ko = validacion.validar()
+        _, _, det = validacion.validar()
         return RespuestaEtapa(
             etapa="validacion",
             estado="OK",
             duracion_segundos=round(time.perf_counter() - t0, 3),
-            detalles={
-                "archivo_validados": ruta_ok.name,
-                "archivo_rechazados": ruta_ko.name if ruta_ko else None,
-            },
+            detalles=det,
         )
     except Exception as exc:
         log.error("Fallo validacion: %s", exc, exc_info=True)
@@ -182,7 +179,7 @@ def endpoint_load():
         kpis = carga_bd.cargar()
         return RespuestaEtapa(
             etapa="carga_bd",
-            estado="OK",
+            estado=kpis.get("estado", "OK"),
             duracion_segundos=round(time.perf_counter() - t0, 3),
             detalles=kpis,
         )
@@ -200,30 +197,27 @@ def endpoint_run_pipeline():
 
     try:
         t0 = time.perf_counter()
-        ruta_raw = ingesta.ingestar()
+        ruta_raw, det = ingesta.ingestar()
         resultados.append(RespuestaEtapa(
             etapa="ingesta", estado="OK",
             duracion_segundos=round(time.perf_counter() - t0, 3),
-            detalles={"archivo_salida": ruta_raw.name},
+            detalles=det,
         ))
 
         t0 = time.perf_counter()
-        ruta_clean = limpieza.limpiar(ruta_raw)
+        ruta_clean, det = limpieza.limpiar(ruta_raw)
         resultados.append(RespuestaEtapa(
             etapa="limpieza", estado="OK",
             duracion_segundos=round(time.perf_counter() - t0, 3),
-            detalles={"archivo_salida": ruta_clean.name},
+            detalles=det,
         ))
 
         t0 = time.perf_counter()
-        ruta_valid, ruta_rech = validacion.validar(ruta_clean)
+        ruta_valid, ruta_rech, det = validacion.validar(ruta_clean)
         resultados.append(RespuestaEtapa(
             etapa="validacion", estado="OK",
             duracion_segundos=round(time.perf_counter() - t0, 3),
-            detalles={
-                "archivo_validados": ruta_valid.name,
-                "archivo_rechazados": ruta_rech.name if ruta_rech else None,
-            },
+            detalles=det,
         ))
 
         t0 = time.perf_counter()
