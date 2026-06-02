@@ -11,4 +11,6 @@ logs/
 .github/
 docs/
 tests/
+build/
+node_modules/
 *.bak
