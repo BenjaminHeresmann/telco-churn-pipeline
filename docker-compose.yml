@@ -1,0 +1,62 @@
+# ============================================================
+# Pipeline DataOps desacoplado POR CAPA — un contenedor por etapa.
+#
+# Cada componente del pipeline (ingesta / limpieza / validacion / carga) corre
+# en su PROPIO contenedor. Asi cada capa:
+#   - se puede mejorar/modificar de forma independiente (sin tocar el resto),
+#   - se puede escalar/replicar por separado (solo la etapa con mas carga),
+#   - falla de forma aislada (no cae todo el sistema).
+#
+# Se comunican por un volumen de datos compartido, que son las "zonas" del
+# pipeline:  data/source -> data/raw -> data/clean -> data/validated -> (Supabase)
+# El orden lo garantiza depends_on (cada etapa arranca cuando la anterior
+# termino OK). La etapa de carga persiste en Supabase (PostgreSQL gestionado).
+#
+# Ejecutar todo el pipeline (4 contenedores en cadena):
+#     docker compose up --build
+#
+# Reconstruir/escalar solo una capa (ej. la mas cargada):
+#     docker compose up --build --scale limpieza=3 limpieza
+# ============================================================
+
+services:
+  ingesta:
+    build: .
+    image: telco-pipeline:local
+    container_name: etapa1-ingesta
+    command: python src/ingesta.py
+    volumes:
+      - ./data:/app/data
+
+  limpieza:
+    image: telco-pipeline:local
+    container_name: etapa2-limpieza
+    command: python src/limpieza.py
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      ingesta:
+        condition: service_completed_successfully
+
+  validacion:
+    image: telco-pipeline:local
+    container_name: etapa3-validacion
+    command: python src/validacion.py
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      limpieza:
+        condition: service_completed_successfully
+
+  carga:
+    image: telco-pipeline:local
+    container_name: etapa4-carga
+    command: python src/carga_bd.py
+    environment:
+      # La unica etapa que toca la BD: recibe DATABASE_URL (de .env).
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      validacion:
+        condition: service_completed_successfully

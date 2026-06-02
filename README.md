@@ -62,6 +62,27 @@ curl -X POST https://telco-api-production-e466.up.railway.app/pipeline/run
 
 Cada uno corre independiente. Si Railway cae, Supabase sigue. Si la API se escala horizontalmente, la BD no se duplica. **No es monolito.**
 
+### Contenedores por capa (docker-compose)
+
+El pipeline no corre en un solo contenedor: **cada etapa (capa) es su propio contenedor**, definidos en [`docker-compose.yml`](docker-compose.yml). Asi cada componente se puede **modificar y escalar de forma independiente**.
+
+```
+[etapa1-ingesta] -> [etapa2-limpieza] -> [etapa3-validacion] -> [etapa4-carga] -> Supabase
+   contenedor          contenedor           contenedor            contenedor
+   data/source         data/raw             data/clean            data/validated
+        \__________________ volumen de datos compartido (zonas) __________________/
+```
+
+- Cada capa se **mejora/modifica sin tocar las demas** (codigo y despliegue por modulo).
+- Se **replica solo la etapa saturada**, no todo el sistema: `docker compose up --scale limpieza=3 limpieza`.
+- Se comunican por un **volumen compartido**; el orden lo garantiza `depends_on` (cada etapa arranca cuando la anterior termino OK). Solo `carga` toca la BD (recibe `DATABASE_URL`).
+
+```bash
+docker compose up --build     # corre las 4 etapas, cada una en su contenedor
+```
+
+> La API REST en Railway expone esas mismas etapas como endpoints (gateway/orquestador para la demo en vivo): el pipeline por contenedores y la API **comparten el mismo codigo e imagen**. Cada etapa es ademas un modulo ejecutable por si solo (`python src/ingesta.py`, etc.).
+
 ---
 
 ## Pipeline de 4 etapas (cada una un endpoint independiente)

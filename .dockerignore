@@ -1,0 +1,19 @@
+# Mantiene el contexto de build liviano (no se copian al contenedor)
+.git/
+.venv/
+venv/
+build/
+node_modules/
+docs/
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/raw/
+data/clean/
+data/validated/
+data/rejected/
+logs/*.log
+.env
+*.md
+.github/
