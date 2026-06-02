@@ -134,8 +134,11 @@ def validar(ruta_clean: Path | None = None) -> tuple[Path, Path | None, dict]:
 
     detalles = {
         "archivo_entrada": ruta_clean.name,
+        "ruta_entrada": ruta_clean.relative_to(PROJECT_ROOT).as_posix(),
         "archivo_validados": ruta_validados.name,
+        "ruta_validados": ruta_validados.relative_to(PROJECT_ROOT).as_posix(),
         "archivo_rechazados": ruta_rechazados.name if ruta_rechazados else None,
+        "ruta_rechazados": ruta_rechazados.relative_to(PROJECT_ROOT).as_posix() if ruta_rechazados else None,
         "filas_entrada": int(n_inicial),
         "filas_validas": int(len(validos_final)),
         "filas_rechazadas": int(len(rechazados_total)),

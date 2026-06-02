@@ -212,6 +212,8 @@ def cargar(ruta_validados: Path | None = None) -> dict:
 
     kpi = {
         "archivo_entrada": ruta_validados.name,
+        "ruta_entrada": ruta_validados.relative_to(PROJECT_ROOT).as_posix(),
+        "destino": "Supabase (PostgreSQL 17)",
         "tabla_destino": "clientes",
         "modo_carga": "full-refresh idempotente (TRUNCATE + INSERT transaccional)",
         "registros_leidos": int(n_leidos),

@@ -102,7 +102,9 @@ def limpiar(ruta_raw: Path | None = None) -> tuple[Path, dict]:
 
     detalles = {
         "archivo_entrada": ruta_raw.name,
+        "ruta_entrada": ruta_raw.relative_to(PROJECT_ROOT).as_posix(),
         "archivo_salida": ruta_destino.name,
+        "ruta_salida": ruta_destino.relative_to(PROJECT_ROOT).as_posix(),
         "filas_entrada": int(n_inicial),
         "filas_salida": int(n_final),
         "duplicados_eliminados": int(duplicados),

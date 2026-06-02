@@ -26,6 +26,14 @@ DATA_SOURCE_DEFAULT = PROJECT_ROOT / "data" / "source" / "telco_churn_source.csv
 log = get_logger("ingesta")
 
 
+def _rel(ruta: Path) -> str:
+    """Ruta relativa al repo (posix) para mostrar de donde viene / va el archivo."""
+    try:
+        return ruta.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return ruta.as_posix()
+
+
 def ingestar(origen: str | None = None) -> tuple[Path, dict]:
     """Obtiene el CSV fuente y lo deposita en data/raw con timestamp.
 
@@ -53,7 +61,7 @@ def ingestar(origen: str | None = None) -> tuple[Path, dict]:
             )
         log.info("Ingesta desde archivo local explicito: %s", ruta_origen)
         shutil.copy2(ruta_origen, ruta_destino)
-        origen_tipo, archivo_entrada = "ruta explicita", ruta_origen.name
+        origen_tipo, archivo_entrada, ruta_entrada = "ruta explicita", ruta_origen.name, _rel(ruta_origen)
 
     elif os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_KEY"):
         nombre_archivo = os.getenv("SOURCE_CSV_FILENAME", "telco_churn_source.csv")
@@ -67,7 +75,8 @@ def ingestar(origen: str | None = None) -> tuple[Path, dict]:
             raise RuntimeError(
                 f"Fallo al descargar {nombre_archivo} desde Supabase Storage"
             )
-        origen_tipo, archivo_entrada = "Supabase Storage", f"{bucket}/{nombre_archivo}"
+        origen_tipo, archivo_entrada = "Supabase Storage", nombre_archivo
+        ruta_entrada = f"Supabase Storage: {bucket}/{nombre_archivo}"
 
     else:
         path_local = os.getenv("SOURCE_CSV_PATH")
@@ -85,7 +94,7 @@ def ingestar(origen: str | None = None) -> tuple[Path, dict]:
                 "Verifica data/source/telco_churn_source.csv o setea SOURCE_CSV_PATH."
             )
         shutil.copy2(ruta_origen, ruta_destino)
-        archivo_entrada = ruta_origen.name
+        archivo_entrada, ruta_entrada = ruta_origen.name, _rel(ruta_origen)
 
     df = pd.read_csv(ruta_destino)
     n_filas, n_cols = df.shape
@@ -96,8 +105,10 @@ def ingestar(origen: str | None = None) -> tuple[Path, dict]:
 
     detalles = {
         "archivo_entrada": archivo_entrada,
+        "ruta_entrada": ruta_entrada,
         "origen": origen_tipo,
         "archivo_salida": nombre_destino,
+        "ruta_salida": _rel(ruta_destino),
         "filas": int(n_filas),
         "columnas": int(n_cols),
     }
