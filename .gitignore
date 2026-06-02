@@ -50,3 +50,14 @@ reports/*.html
 
 # Build artifacts de documentos (carpeta transitoria; los generadores viven en scripts/)
 build/
+
+# Documentos internos / borradores y handoffs (no se publican en el repo)
+docs/AUDITORIA.md
+docs/informe_tecnico.md
+docs/presentacion.md
+docs/Informe_Tecnico_Evaluacion2.docx
+docs/slides/BRIEF_REDISENO_10_LAMINAS.md
+docs/slides/PROMPT_CLAUDE_DESIGN_2_LAMINAS.md
+docs/slides/GUION_DEMO_EN_VIVO.md
+docs/slides/Guion_Demo_Defensa.docx
+docs/slides/Guion_Demo_Defensa.pdf
