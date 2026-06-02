@@ -15,6 +15,7 @@ Pipeline DataOps **desacoplado** de 4 etapas para preparar el dataset Telco Cust
 | **API en producción (Railway)** | https://telco-api-production-e466.up.railway.app |
 | **Documentación interactiva (Swagger)** | https://telco-api-production-e466.up.railway.app/docs |
 | **Health check** | https://telco-api-production-e466.up.railway.app/health |
+| **Presentación de la defensa (Vercel)** | https://telco-churn-defensa.vercel.app |
 | **Repositorio (GitHub)** | https://github.com/BenjaminHeresmann/telco-churn-pipeline |
 | **Base de datos** | PostgreSQL gestionado en Supabase (proyecto `telco-churn`) |
 
@@ -140,10 +141,11 @@ telco-churn-pipeline/
 ├── tests/
 │   └── test_validaciones.py        Tests unitarios (corren en GitHub Actions)
 └── docs/
-    ├── informe_tecnico.md          Informe academico
-    ├── diagramas.md                Mermaid renders
-    ├── presentacion.md             Guion de slides
-    └── DEPLOY.md                   Guia paso-a-paso de deploy cloud
+    ├── Informe_Tecnico_Evaluacion2.pdf   Informe academico (entregable)
+    ├── diagramas.md                      Fuente Mermaid de los diagramas
+    ├── DEPLOY.md                         Guia paso-a-paso de deploy cloud
+    ├── img/                              Diagramas + evidencias (capturas)
+    └── slides/README.md                  Presentacion (desplegada en Vercel)
 ```
 
 ---
@@ -274,7 +276,7 @@ pytest tests/ -v
 - **Dockerfile reproducible**: pin de versiones, no `latest`.
 - **Logs estructurados** sin datos personales.
 
-Ver detalle del plan de seguridad en [`docs/informe_tecnico.md`](docs/informe_tecnico.md) sección 5.
+Ver detalle del plan de seguridad en el [informe técnico](docs/Informe_Tecnico_Evaluacion2.pdf).
 
 ---
 
