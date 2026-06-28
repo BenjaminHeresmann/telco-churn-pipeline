@@ -1,0 +1,4 @@
+operacion,segundos,filas
+Lectura local (CSV),0.018,7043
+Lectura nube (Supabase),3.939,7043
+Entrenamiento modelo,1.336,7043

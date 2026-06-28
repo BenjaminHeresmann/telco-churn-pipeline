@@ -1,0 +1,24 @@
+{
+  "ram_rss_mb": 200.1,
+  "ram_delta_mb": 81.8,
+  "cpu_pct": 9.9,
+  "overhead_nube_vs_local_x": 218.8,
+  "operaciones": [
+    {
+      "operacion": "Lectura local (CSV)",
+      "segundos": 0.018,
+      "filas": 7043
+    },
+    {
+      "operacion": "Lectura nube (Supabase)",
+      "segundos": 3.939,
+      "filas": 7043
+    },
+    {
+      "operacion": "Entrenamiento modelo",
+      "segundos": 1.336,
+      "filas": 7043
+    }
+  ],
+  "total_segundos": 5.293
+}

@@ -1,0 +1,54 @@
+== Contract ==
+                   n  churn_pct
+Contract                       
+Month-to-month  3875       42.7
+One year        1473       11.3
+Two year        1695        2.8
+
+== InternetService ==
+                    n  churn_pct
+InternetService                 
+DSL              2421       19.0
+Fiber optic      3096       41.9
+No               1526        7.4
+
+== PaymentMethod ==
+                              n  churn_pct
+PaymentMethod                             
+Bank transfer (automatic)  1544       16.7
+Credit card (automatic)    1522       15.2
+Electronic check           2365       45.3
+Mailed check               1612       19.1
+
+== tenure_group ==
+                 n  churn_pct
+tenure_group                 
+0-12          2186       47.4
+13-24         1024       28.7
+25-48         1594       20.4
+49-72         2239        9.5
+
+== SeniorCitizen ==
+                  n  churn_pct
+SeniorCitizen                 
+0              5901       23.6
+1              1142       41.7
+
+== PaperlessBilling ==
+                     n  churn_pct
+PaperlessBilling                 
+False             2872       16.3
+True              4171       33.6
+
+== Dependents ==
+               n  churn_pct
+Dependents                 
+False       4933       31.3
+True        2110       15.5
+
+== Partner ==
+            n  churn_pct
+Partner                 
+False    3641       33.0
+True     3402       19.7
+

@@ -1,0 +1,8 @@
+# Dashboard BI (Streamlit) — deployable independiente del API de Railway.
+# streamlit<1.50 usa tornado (no starlette), por lo que NO choca con fastapi 0.110.
+streamlit<1.50
+plotly>=6.0
+pandas==2.1.4
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0

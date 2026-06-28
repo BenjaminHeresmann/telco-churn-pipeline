@@ -1,0 +1,16 @@
+,peso
+num__tenure,1.203139285985957
+cat__Contract_Two year,0.7321843391754389
+cat__Contract_Month-to-month,0.6384845868327739
+num__TotalCharges,0.5884192978195509
+cat__InternetService_Fiber optic,0.5743618253367937
+num__MonthlyCharges,0.5152844194722457
+cat__InternetService_DSL,0.5147704951882464
+cat__PaperlessBilling_0,0.28091395019096543
+cat__PaymentMethod_Electronic check,0.24469312139087054
+cat__StreamingTV_No internet service,0.24403206353868764
+cat__DeviceProtection_No internet service,0.24403206353868764
+cat__OnlineSecurity_No internet service,0.24403206353868764
+cat__StreamingMovies_No internet service,0.2440320635386851
+cat__TechSupport_No internet service,0.2440320635386851
+cat__InternetService_No,0.2440320635386851

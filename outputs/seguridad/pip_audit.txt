@@ -1,0 +1,19 @@
+$ pip-audit -r requirements.txt --progress-spinner off
+Found 10 known vulnerabilities in 3 packages
+Name          Version ID             Fix Versions
+------------- ------- -------------- ------------
+python-dotenv 1.0.0   CVE-2026-28684 1.2.2
+pytest        7.4.4   CVE-2025-71176 9.0.3
+starlette     0.36.3  PYSEC-2026-161 1.0.1
+starlette     0.36.3  PYSEC-2026-161 1.0.1
+starlette     0.36.3  PYSEC-2026-249 1.3.1
+starlette     0.36.3  PYSEC-2026-248 1.3.0
+starlette     0.36.3  CVE-2024-47874 0.40.0
+starlette     0.36.3  CVE-2025-54121 0.47.2
+starlette     0.36.3  CVE-2026-48818 1.1.0
+starlette     0.36.3  CVE-2026-48817 1.1.0
+
+# Interpretacion:
+# - starlette: transitiva de fastapi==0.110.0 (acoplada; subirla exige subir FastAPI).
+# - python-dotenv: actualizacion directa y segura a 1.2.2 (correctiva).
+# - pytest: solo dependencia de desarrollo/test, no de runtime de produccion.
