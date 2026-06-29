@@ -359,7 +359,7 @@ El modelo se despliega como **dos servicios independientes** ([`src/serve_modelo
 - **trainer** (`POST /train`): entrena y **guarda** el modelo en Supabase.
 - **predictor** (`GET /metrics`, `GET /predict/cliente/{id}`, `POST /predict/batch`): **carga** el modelo y predice, **sin re-entrenar**.
 
-El **dashboard ejecuta la predicción on-demand**: tiene botones para **entrenar** y **ejecutar predicción** en vivo (llaman a los microservicios), de modo que el panel arranca vacío y **se llena al pulsar "Ejecutar predicción"** — ideal para construir el resultado durante la defensa.
+El **dashboard se construye en vivo**: arranca vacío (botón **🧨 Vaciar TODO**) y, gracias a un **auto-refresh**, se va llenando solo al ejecutar `POST /train` y `POST /predict/batch` —desde los **Swagger** de los microservicios o desde los botones del dashboard—: aparecen las **métricas al entrenar** y los **clientes al predecir**. Ideal para construir el resultado paso a paso durante la defensa.
 
 ```bash
 python src/modelo.py --train      # entrena el modelo final y lo guarda en Supabase
