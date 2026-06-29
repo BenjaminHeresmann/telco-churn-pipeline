@@ -19,7 +19,7 @@ Pipeline DataOps **desacoplado** de 4 etapas para preparar el dataset Telco Cust
 | **Health check** | https://telco-api-production-e466.up.railway.app/health |
 | **Presentación Eval 3 — deck (Vercel)** | https://deck-benjaminheresmanns-projects.vercel.app |
 | **Presentación Eval 2 — deck (Vercel)** | https://telco-churn-defensa.vercel.app |
-| **Dashboard BI (Streamlit)** | local: `streamlit run dashboard/app.py` → http://localhost:8501 |
+| **Dashboard BI (Streamlit, en vivo)** | https://telco-dashboard-production.up.railway.app |
 | **Repositorio (GitHub)** | https://github.com/BenjaminHeresmann/telco-churn-pipeline |
 | **Base de datos** | PostgreSQL gestionado en Supabase (proyecto `telco-churn`) |
 
@@ -350,7 +350,7 @@ pip install -r dashboard/requirements.txt
 streamlit run dashboard/app.py
 ```
 
-Informe completo (12 págs) en [`docs/Informe_Tecnico_Evaluacion3.pdf`](docs/Informe_Tecnico_Evaluacion3.pdf) · deck en [Vercel](https://deck-benjaminheresmanns-projects.vercel.app).
+Informe completo (12 págs) en [`docs/Informe_Tecnico_Evaluacion3.pdf`](docs/Informe_Tecnico_Evaluacion3.pdf) · deck en [Vercel](https://deck-benjaminheresmanns-projects.vercel.app) · dashboard en vivo en [Railway](https://telco-dashboard-production.up.railway.app) (`Dockerfile.dashboard`, servicio independiente del API).
 
 ---
 

@@ -1,0 +1,19 @@
+# Dashboard BI (Streamlit) — servicio Railway INDEPENDIENTE del API FastAPI.
+# Se construye desde la raiz del repo para conservar las rutas de app.py
+# (dashboard/app.py usa parents[1]/outputs/modelo). Railway usa este Dockerfile
+# via la variable RAILWAY_DOCKERFILE_PATH=Dockerfile.dashboard.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Deps del dashboard (streamlit<1.50 + plotly + acceso a Postgres)
+COPY dashboard/requirements.txt ./dashboard/requirements.txt
+RUN pip install --no-cache-dir -r dashboard/requirements.txt
+
+# Codigo del dashboard + artefactos del modelo que consume (metricas, importancia)
+COPY dashboard/ ./dashboard/
+COPY outputs/modelo/ ./outputs/modelo/
+
+EXPOSE 8501
+# Railway inyecta $PORT; Streamlit debe escuchar en 0.0.0.0:$PORT
+CMD ["sh", "-c", "streamlit run dashboard/app.py --server.port ${PORT:-8501} --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false"]
