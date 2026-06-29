@@ -1,43 +1,37 @@
-"""Etapa de modelado (Evaluacion 3): entrenamiento y evaluacion del modelo de churn.
+"""Etapa de modelado (Evaluacion 3): entrenamiento, evaluacion e INFERENCIA del modelo de churn.
 
 Construye SOBRE el pipeline DataOps de Eval 2: toma los datos ya limpios y
-validados (ultimo CSV validado, o la tabla `clientes` de Supabase) y entrena un
-clasificador binario supervisado para predecir el abandono de clientes (`churn`).
+validados (tabla `clientes` de Supabase o el ultimo CSV validado) y trabaja en
+tres modos, separando entrenamiento de prediccion (ciclo train/inference):
 
-Flujo (modulo 3.1 del ramo): diseno -> EDA/calidad -> preprocesamiento ->
-split estratificado -> BASELINE (Regresion Logistica, Arbol) -> MEJORA
-(Random Forest balanceado) -> metricas (matriz de confusion, accuracy,
-precision, recall, F1, ROC-AUC, Gini) -> artefactos + predicciones persistibles.
+    python src/modelo.py --eval                 # entrena y COMPARA 4 modelos + graficos (informe)
+    python src/modelo.py --train                # entrena el modelo final y lo GUARDA en Supabase
+    python src/modelo.py --predict              # CARGA el modelo guardado y predice (sin re-entrenar)
+
+Modos --train / --predict habilitan el despliegue como microservicios separados
+(un contenedor entrena, otro predice), compartiendo el modelo entrenado via
+Supabase (tabla `modelo_artefacto`) — igual que las capas del pipeline comparten
+datos via Supabase. Ver src/serve_modelo.py (capa FastAPI de serving).
 
 Decisiones de diseno:
 - Variable objetivo: `churn` (booleana). Problema: clasificacion binaria.
-- Metrica prioritaria: RECALL. En retencion el costo del Falso Negativo
-  (cliente que se va y NO detectamos) es mayor que el del Falso Positivo.
-- Desbalance (26,5% churn): se trata con `class_weight='balanced'` (sin generar
-  datos sinteticos). El accuracy es enganoso aqui (un modelo "todo No-churn"
-  daria ~73,5%), por eso el foco esta en recall/F1.
-- `tenure_group` se descarta (es una binarizacion de `tenure`, redundante).
-
-Uso:
-    python src/modelo.py                 # entrena desde el ultimo CSV validado
-    python src/modelo.py --fuente supabase
-    python src/modelo.py --persistir     # ademas sube las predicciones a Supabase
+- Metrica prioritaria: RECALL (el Falso Negativo es el error mas caro en retencion).
+- Desbalance (26,5%): se trata con `class_weight='balanced'`.
+- Modelo de produccion: Regresion Logistica balanceada (mejor F1/recall, interpretable).
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import glob
+import io
 import json
 import sys
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -61,9 +55,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_VALIDATED = PROJECT_ROOT / "data" / "validated"
 OUT_DIR = PROJECT_ROOT / "outputs" / "modelo"
 RANDOM_STATE = 42
+MODELO_NOMBRE = "LogReg balanceada"
 
 log = get_logger("modelo")
-sns.set_theme(style="whitegrid")
 
 # Columnas que NO entran como predictoras
 DROP_COLS = ["customerID", "Churn", "tenure_group"]
@@ -74,13 +68,12 @@ NUM_CONTINUAS = ["tenure", "MonthlyCharges", "TotalCharges"]
 def cargar_datos(fuente: str = "csv") -> pd.DataFrame:
     """Carga el dataset limpio+validado desde el CSV validado o desde Supabase."""
     if fuente == "supabase":
-        from carga_bd import _build_engine, MAPEO_COLUMNAS
+        from carga_bd import MAPEO_COLUMNAS, _build_engine
 
         log.info("Cargando datos desde Supabase (tabla clientes)")
         engine = _build_engine()
         df = pd.read_sql("SELECT * FROM clientes", engine)
-        # la BD usa snake_case; revertir al esquema del CSV para un flujo unico
-        inverso = {v: k for k, v in MAPEO_COLUMNAS.items()}
+        inverso = {v: k for k, v in MAPEO_COLUMNAS.items()}  # snake_case -> esquema CSV
         df = df.rename(columns=inverso)
         if "fecha_ingesta" in df.columns:
             df = df.drop(columns=["fecha_ingesta"])
@@ -92,58 +85,23 @@ def cargar_datos(fuente: str = "csv") -> pd.DataFrame:
         log.info("Cargando datos desde %s", ruta.name)
         df = pd.read_csv(ruta)
 
-    df["Churn"] = df["Churn"].astype(int)
+    if "Churn" in df.columns:
+        df["Churn"] = df["Churn"].astype(int)
     return df
 
 
-# ----------------------------------------------------------------------- EDA
-def analisis_exploratorio(df: pd.DataFrame) -> dict:
-    """Estadistica descriptiva + analisis bivariado (tasa de churn por categoria)."""
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    n, pos = len(df), int(df["Churn"].sum())
-    log.info("Dataset: %d filas | churn=%d (%.2f%%)", n, pos, 100 * pos / n)
-
-    df[NUM_CONTINUAS].describe().round(2).to_csv(OUT_DIR / "eda_descriptiva_numericas.csv")
-
-    bivar = {}
-    for col in ["Contract", "InternetService", "PaymentMethod", "tenure_group",
-                "SeniorCitizen", "PaperlessBilling", "Dependents", "Partner"]:
-        if col not in df.columns:
-            continue
-        t = df.groupby(col)["Churn"].agg(n="count", churn_pct=lambda s: round(100 * s.mean(), 1))
-        bivar[col] = t
-    with open(OUT_DIR / "eda_bivariado_churn.txt", "w", encoding="utf-8") as f:
-        for col, t in bivar.items():
-            f.write(f"== {col} ==\n{t.to_string()}\n\n")
-
-    # matriz de correlacion (numericas + target)
-    plt.figure(figsize=(5, 4))
-    sns.heatmap(df[NUM_CONTINUAS + ["Churn"]].corr(), annot=True, fmt=".2f",
-                cmap="coolwarm", center=0)
-    plt.title("Matriz de correlacion (numericas + churn)")
-    plt.tight_layout()
-    plt.savefig(OUT_DIR / "correlacion_numericas.png", dpi=130)
-    plt.close()
-
-    # distribucion de clase (desbalance)
-    plt.figure(figsize=(4.5, 4))
-    ax = sns.barplot(x=["No churn", "Churn"], y=[n - pos, pos],
-                     hue=["No churn", "Churn"], palette=["#22c55e", "#ef4444"], legend=False)
-    for i, v in enumerate([n - pos, pos]):
-        ax.text(i, v + 40, f"{v}\n({100 * v / n:.1f}%)", ha="center", fontsize=9)
-    plt.title("Distribucion de la clase (desbalance)")
-    plt.ylabel("clientes")
-    plt.tight_layout()
-    plt.savefig(OUT_DIR / "distribucion_churn.png", dpi=130)
-    plt.close()
-    return {"n": n, "churn": pos, "churn_pct": round(100 * pos / n, 2)}
+def _features(df: pd.DataFrame) -> pd.DataFrame:
+    """Devuelve la matriz de predictoras X (sin id, target ni columnas redundantes)."""
+    X = df.drop(columns=[c for c in DROP_COLS if c in df.columns]).copy()
+    bool_cols = X.select_dtypes(include="bool").columns
+    X[bool_cols] = X[bool_cols].astype(int)
+    return X
 
 
 # ------------------------------------------------------------- preprocesador
 def construir_preprocesador(X: pd.DataFrame) -> ColumnTransformer:
     """ColumnTransformer: escala continuas, deja binarias, one-hot a categoricas."""
-    bool_cols = X.select_dtypes(include="bool").columns.tolist()
-    binarias = ["SeniorCitizen"] + bool_cols
+    binarias = [c for c in X.columns if set(pd.unique(X[c])) <= {0, 1} and c not in NUM_CONTINUAS]
     categoricas = [c for c in X.columns if c not in NUM_CONTINUAS + binarias]
     return ColumnTransformer([
         ("num", StandardScaler(), NUM_CONTINUAS),
@@ -152,187 +110,314 @@ def construir_preprocesador(X: pd.DataFrame) -> ColumnTransformer:
     ])
 
 
-def construir_modelos() -> dict:
-    """Baseline (defaults del docente) + version balanceada + Random Forest.
+def _modelo_produccion(X: pd.DataFrame) -> Pipeline:
+    """Pipeline del modelo elegido (Regresion Logistica balanceada)."""
+    return Pipeline([
+        ("pre", construir_preprocesador(X)),
+        ("clf", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=RANDOM_STATE)),
+    ])
 
-    Nota: en scikit-learn la regularizacion L2 es el comportamiento por defecto
-    de LogisticRegression (equivale al penalty='l2' que indica el material).
-    """
+
+def _metricas(y_true, y_pred, proba) -> dict:
+    cm = confusion_matrix(y_true, y_pred)
+    auc = roc_auc_score(y_true, proba)
     return {
-        "LogReg (baseline)": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
-        "Arbol (baseline)": DecisionTreeClassifier(max_depth=5, random_state=RANDOM_STATE),
-        "LogReg balanceada": LogisticRegression(max_iter=1000, class_weight="balanced",
-                                                random_state=RANDOM_STATE),
-        "RandomForest balanceado": RandomForestClassifier(n_estimators=100,
-                                                          class_weight="balanced",
-                                                          random_state=RANDOM_STATE, n_jobs=-1),
+        "modelo": MODELO_NOMBRE,
+        "accuracy": round(accuracy_score(y_true, y_pred), 4),
+        "precision": round(precision_score(y_true, y_pred), 4),
+        "recall": round(recall_score(y_true, y_pred), 4),
+        "f1": round(f1_score(y_true, y_pred), 4),
+        "roc_auc": round(auc, 4),
+        "gini": round(2 * auc - 1, 4),
+        "TN": int(cm[0, 0]), "FP": int(cm[0, 1]), "FN": int(cm[1, 0]), "TP": int(cm[1, 1]),
+        "n_test": int(len(y_true)),
     }
 
 
-# ------------------------------------------------------------- entrenamiento
-def entrenar_y_evaluar(df: pd.DataFrame) -> dict:
-    """Entrena todos los modelos, calcula metricas y genera artefactos graficos."""
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+# ------------------------------------------------------- entrenamiento (prod)
+def entrenar_modelo(df: pd.DataFrame) -> tuple[Pipeline, dict]:
+    """Entrena el modelo de produccion. Evalua en un holdout (70/30 estratificado)
+    para reportar metricas honestas y luego RE-AJUSTA con TODOS los datos
+    etiquetados (mejor modelo final). Devuelve (pipeline_final, metricas)."""
+    X = _features(df)
     y = df["Churn"]
-    ids = df["customerID"]
-    X = df.drop(columns=[c for c in DROP_COLS if c in df.columns]).copy()
-    X[X.select_dtypes(include="bool").columns] = X.select_dtypes(include="bool").astype(int)
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        X, y, test_size=0.30, stratify=y, random_state=RANDOM_STATE)
 
-    X_tr, X_te, y_tr, y_te, _, id_te = train_test_split(
-        X, y, ids, test_size=0.30, stratify=y, random_state=RANDOM_STATE)
-    log.info("Split 70/30 estratificado | train=%d (churn %.2f%%) test=%d (churn %.2f%%)",
-             len(X_tr), 100 * y_tr.mean(), len(X_te), 100 * y_te.mean())
+    evaluador = _modelo_produccion(X).fit(X_tr, y_tr)
+    met = _metricas(y_te, evaluador.predict(X_te), evaluador.predict_proba(X_te)[:, 1])
+    log.info("Holdout | recall=%.3f f1=%.3f gini=%.3f", met["recall"], met["f1"], met["gini"])
 
-    pre = construir_preprocesador(X)
-    filas, roc_data, fitted = [], {}, {}
-    for nombre, clf in construir_modelos().items():
-        pipe = Pipeline([("pre", pre), ("clf", clf)]).fit(X_tr, y_tr)
-        fitted[nombre] = pipe
-        p_te = pipe.predict(X_te)
-        proba = pipe.predict_proba(X_te)[:, 1]
-        p_tr = pipe.predict(X_tr)
-        auc = roc_auc_score(y_te, proba)
-        roc_data[nombre] = (*roc_curve(y_te, proba)[:2], auc)
-        cm = confusion_matrix(y_te, p_te)
-        filas.append({
-            "modelo": nombre,
-            "accuracy": round(accuracy_score(y_te, p_te), 4),
-            "precision": round(precision_score(y_te, p_te), 4),
-            "recall": round(recall_score(y_te, p_te), 4),
-            "f1": round(f1_score(y_te, p_te), 4),
-            "roc_auc": round(auc, 4),
-            "gini": round(2 * auc - 1, 4),
-            "acc_train": round(accuracy_score(y_tr, p_tr), 4),
-            "recall_train": round(recall_score(y_tr, p_tr), 4),
-            "TN": int(cm[0, 0]), "FP": int(cm[0, 1]),
-            "FN": int(cm[1, 0]), "TP": int(cm[1, 1]),
-        })
-
-    tabla = pd.DataFrame(filas)
-    tabla.to_csv(OUT_DIR / "metricas_modelos.csv", index=False)
-    log.info("Comparativa de modelos:\n%s", tabla.to_string(index=False))
-
-    mejor = tabla.sort_values("f1", ascending=False).iloc[0]["modelo"]
-    best = fitted[mejor]
-    pred_best = best.predict(X_te)
-    proba_best = best.predict_proba(X_te)[:, 1]
-    log.info("Mejor modelo por F1: %s", mejor)
-
-    _graficar_roc(roc_data)
-    _graficar_confusion(y_te, pred_best, mejor)
-    _graficar_importancia(best, mejor)
-
-    predicciones = pd.DataFrame({
-        "customer_id": id_te.values,
-        "churn_real": y_te.values.astype(int),
-        "churn_pred": pred_best.astype(int),
-        "churn_proba": np.round(proba_best, 4),
-        "acierto": (pred_best == y_te.values),
-        "modelo": mejor,
-    })
-    predicciones.to_csv(OUT_DIR / "predicciones_test.csv", index=False)
-
-    resumen = {
-        "n_total": len(df), "churn_pct": round(100 * y.mean(), 2),
-        "split": "70/30 estratificado", "mejor_modelo_por_f1": mejor,
-        "metricas": tabla.to_dict(orient="records"),
-    }
-    with open(OUT_DIR / "resumen_modelo.json", "w", encoding="utf-8") as f:
-        json.dump(resumen, f, ensure_ascii=False, indent=2)
-    return {"tabla": tabla, "mejor": mejor, "predicciones": predicciones}
+    final = _modelo_produccion(X).fit(X, y)  # modelo final con todo el dato etiquetado
+    log.info("Modelo final entrenado sobre %d registros", len(X))
+    return final, met
 
 
-# ----------------------------------------------------------------- graficos
-def _graficar_roc(roc_data: dict) -> None:
-    plt.figure(figsize=(6.5, 5.5))
-    for nombre, (fpr, tpr, auc) in roc_data.items():
-        plt.plot(fpr, tpr, label=f"{nombre} (AUC={auc:.3f})")
-    plt.plot([0, 1], [0, 1], "k--", alpha=.4)
-    plt.xlabel("FPR (1 - especificidad)")
-    plt.ylabel("TPR (recall)")
-    plt.title("Curvas ROC — comparativa de modelos")
-    plt.legend(loc="lower right", fontsize=8)
-    plt.tight_layout()
-    plt.savefig(OUT_DIR / "roc_comparativa.png", dpi=130)
-    plt.close()
-
-
-def _graficar_confusion(y_te, pred, nombre) -> None:
-    cm = confusion_matrix(y_te, pred)
-    plt.figure(figsize=(5, 4.2))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                xticklabels=["No churn", "Churn"], yticklabels=["No churn", "Churn"])
-    plt.xlabel("Prediccion")
-    plt.ylabel("Real")
-    plt.title(f"Matriz de confusion — {nombre}")
-    plt.tight_layout()
-    plt.savefig(OUT_DIR / "matriz_confusion_mejor.png", dpi=130)
-    plt.close()
-
-
-def _graficar_importancia(pipe, nombre) -> None:
-    try:
-        feat = pipe.named_steps["pre"].get_feature_names_out()
-        clf = pipe.named_steps["clf"]
-        if hasattr(clf, "feature_importances_"):
-            imp = pd.Series(clf.feature_importances_, index=feat)
-            titulo = f"Top 15 variables (importancia) — {nombre}"
-        else:
-            imp = pd.Series(np.abs(clf.coef_[0]), index=feat)
-            titulo = f"Top 15 variables (|coef|) — {nombre}"
-        imp = imp.sort_values(ascending=False).head(15)
-        plt.figure(figsize=(7.5, 5.5))
-        sns.barplot(x=imp.values, y=[s.split("__", 1)[-1] for s in imp.index], color="#2563eb")
-        plt.title(titulo)
-        plt.xlabel("peso")
-        plt.tight_layout()
-        plt.savefig(OUT_DIR / "importancia_variables.png", dpi=130)
-        plt.close()
-        imp.rename("peso").to_csv(OUT_DIR / "importancia_variables.csv")
-    except Exception as exc:  # pragma: no cover
-        log.warning("No se pudo graficar importancia: %s", exc)
-
-
-# ----------------------------------------------------------- persistencia BD
-def persistir_predicciones(predicciones: pd.DataFrame) -> None:
-    """Crea/refresca la tabla `predicciones` en Supabase como fuente del dashboard BI."""
-    from carga_bd import _build_engine
+# ------------------------------------------------ persistencia del modelo (BD)
+def _tabla_artefacto(engine) -> None:
     from sqlalchemy import text
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS modelo_artefacto (
+                id          SERIAL PRIMARY KEY,
+                nombre      VARCHAR(60) NOT NULL,
+                artefacto   TEXT        NOT NULL,           -- modelo serializado (joblib + base64)
+                metricas    JSONB,
+                fecha       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            ALTER TABLE modelo_artefacto ENABLE ROW LEVEL SECURITY;
+        """))
 
-    engine = _build_engine()
+
+def guardar_modelo_supabase(pipe: Pipeline, met: dict, engine=None) -> None:
+    """Serializa el modelo (joblib->base64) y lo guarda en Supabase. Mantiene 1 vigente."""
+    from sqlalchemy import text
+    if engine is None:
+        from carga_bd import _build_engine
+        engine = _build_engine()
+    _tabla_artefacto(engine)
+    buf = io.BytesIO()
+    joblib.dump(pipe, buf)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE modelo_artefacto RESTART IDENTITY"))
+        conn.execute(
+            text("INSERT INTO modelo_artefacto (nombre, artefacto, metricas) "
+                 "VALUES (:n, :a, CAST(:m AS JSONB))"),
+            {"n": MODELO_NOMBRE, "a": b64, "m": json.dumps(met)},
+        )
+    log.info("Modelo guardado en Supabase (modelo_artefacto) | %d KB", len(b64) // 1024)
+
+
+def cargar_modelo_supabase(engine=None) -> tuple[Pipeline, dict]:
+    """Carga el modelo entrenado mas reciente desde Supabase. NO re-entrena."""
+    from sqlalchemy import text
+    if engine is None:
+        from carga_bd import _build_engine
+        engine = _build_engine()
+    with engine.connect() as conn:
+        row = conn.execute(text(
+            "SELECT artefacto, metricas FROM modelo_artefacto ORDER BY fecha DESC LIMIT 1"
+        )).fetchone()
+    if not row:
+        raise RuntimeError("No hay modelo entrenado en Supabase. Ejecuta primero --train.")
+    pipe = joblib.load(io.BytesIO(base64.b64decode(row[0])))
+    met = row[1] if isinstance(row[1], dict) else json.loads(row[1])
+    log.info("Modelo cargado desde Supabase (sin re-entrenar)")
+    return pipe, met
+
+
+# ---------------------------------------------------------------- prediccion
+def predecir_df(pipe: Pipeline, df: pd.DataFrame) -> pd.DataFrame:
+    """Predice churn sobre un conjunto de clientes usando el modelo YA entrenado."""
+    X = _features(df)
+    proba = pipe.predict_proba(X)[:, 1]
+    pred = pipe.predict(X)
+    out = pd.DataFrame({
+        "customer_id": df["customerID"].values if "customerID" in df.columns else range(len(df)),
+        "churn_pred": pred.astype(int),
+        "churn_proba": np.round(proba, 4),
+        "modelo": MODELO_NOMBRE,
+    })
+    if "Churn" in df.columns:  # si hay etiqueta real, calcula acierto
+        out["churn_real"] = df["Churn"].astype(int).values
+        out["acierto"] = (out["churn_pred"] == out["churn_real"])
+    return out
+
+
+def predecir_cliente(pipe: Pipeline, customer_id: str, engine) -> dict:
+    """Predice el churn de UN cliente existente (lo busca en `clientes` por id)."""
+    from carga_bd import MAPEO_COLUMNAS
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT * FROM clientes WHERE customer_id = :id"),
+                           {"id": customer_id}).mappings().fetchone()
+    if not row:
+        raise KeyError(customer_id)
+    df = pd.DataFrame([dict(row)]).rename(columns={v: k for k, v in MAPEO_COLUMNAS.items()})
+    if "fecha_ingesta" in df.columns:
+        df = df.drop(columns=["fecha_ingesta"])
+    pr = predecir_df(pipe, df).iloc[0]
+    return {
+        "customer_id": customer_id,
+        "churn_predicho": bool(pr["churn_pred"]),
+        "probabilidad_churn": float(pr["churn_proba"]),
+        "modelo": MODELO_NOMBRE,
+    }
+
+
+def persistir_predicciones(predicciones: pd.DataFrame, engine=None) -> int:
+    """Refresca la tabla `predicciones` en Supabase (fuente del dashboard BI)."""
+    from sqlalchemy import text
+    if engine is None:
+        from carga_bd import _build_engine
+        engine = _build_engine()
+    cols = ["customer_id", "churn_real", "churn_pred", "churn_proba", "acierto", "modelo"]
+    df = predicciones.reindex(columns=[c for c in cols if c in predicciones.columns or c in
+                                       ("churn_real", "acierto")])
+    for c in ("churn_real", "acierto"):
+        if c not in df.columns:
+            df[c] = None
     ddl = text("""
         CREATE TABLE IF NOT EXISTS predicciones (
-            customer_id   VARCHAR(20),
-            churn_real    SMALLINT,
-            churn_pred    SMALLINT,
-            churn_proba   NUMERIC(6,4),
-            acierto       BOOLEAN,
-            modelo        VARCHAR(40),
-            fecha         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
+            customer_id VARCHAR(20), churn_real SMALLINT, churn_pred SMALLINT,
+            churn_proba NUMERIC(6,4), acierto BOOLEAN, modelo VARCHAR(40),
+            fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
         ALTER TABLE predicciones ENABLE ROW LEVEL SECURITY;
     """)
     with engine.begin() as conn:
         conn.execute(ddl)
         conn.execute(text("TRUNCATE TABLE predicciones"))
-    predicciones.to_sql("predicciones", engine, if_exists="append", index=False, method="multi")
-    log.info("Persistidas %d predicciones en Supabase (tabla predicciones)", len(predicciones))
+    df[cols].to_sql("predicciones", engine, if_exists="append", index=False, method="multi")
+    log.info("Persistidas %d predicciones en Supabase", len(df))
+    return len(df)
+
+
+# ============================================================ MODO --eval ===
+# (comparativa de 4 modelos + graficos; alimenta el informe. Matplotlib se
+#  importa de forma diferida para no exigirlo en la imagen de serving.)
+def construir_modelos() -> dict:
+    return {
+        "LogReg (baseline)": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
+        "Arbol (baseline)": DecisionTreeClassifier(max_depth=5, random_state=RANDOM_STATE),
+        "LogReg balanceada": LogisticRegression(max_iter=1000, class_weight="balanced",
+                                                random_state=RANDOM_STATE),
+        "RandomForest balanceado": RandomForestClassifier(n_estimators=100, class_weight="balanced",
+                                                          random_state=RANDOM_STATE, n_jobs=-1),
+    }
+
+
+def analisis_exploratorio(df: pd.DataFrame) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set_theme(style="whitegrid")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    n, pos = len(df), int(df["Churn"].sum())
+    df[NUM_CONTINUAS].describe().round(2).to_csv(OUT_DIR / "eda_descriptiva_numericas.csv")
+    bivar = {}
+    for col in ["Contract", "InternetService", "PaymentMethod", "tenure_group",
+                "SeniorCitizen", "PaperlessBilling", "Dependents", "Partner"]:
+        if col in df.columns:
+            bivar[col] = df.groupby(col)["Churn"].agg(n="count",
+                                                      churn_pct=lambda s: round(100 * s.mean(), 1))
+    with open(OUT_DIR / "eda_bivariado_churn.txt", "w", encoding="utf-8") as f:
+        for col, t in bivar.items():
+            f.write(f"== {col} ==\n{t.to_string()}\n\n")
+    plt.figure(figsize=(5, 4))
+    sns.heatmap(df[NUM_CONTINUAS + ["Churn"]].corr(), annot=True, fmt=".2f", cmap="coolwarm", center=0)
+    plt.title("Matriz de correlacion (numericas + churn)")
+    plt.tight_layout(); plt.savefig(OUT_DIR / "correlacion_numericas.png", dpi=130); plt.close()
+    plt.figure(figsize=(4.5, 4))
+    ax = sns.barplot(x=["No churn", "Churn"], y=[n - pos, pos], hue=["No churn", "Churn"],
+                     palette=["#22c55e", "#ef4444"], legend=False)
+    for i, v in enumerate([n - pos, pos]):
+        ax.text(i, v + 40, f"{v}\n({100 * v / n:.1f}%)", ha="center", fontsize=9)
+    plt.title("Distribucion de la clase (desbalance)"); plt.ylabel("clientes")
+    plt.tight_layout(); plt.savefig(OUT_DIR / "distribucion_churn.png", dpi=130); plt.close()
+
+
+def entrenar_y_evaluar(df: pd.DataFrame) -> dict:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set_theme(style="whitegrid")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    y, ids = df["Churn"], df["customerID"]
+    X = _features(df)
+    X_tr, X_te, y_tr, y_te, _, id_te = train_test_split(
+        X, y, ids, test_size=0.30, stratify=y, random_state=RANDOM_STATE)
+    pre = construir_preprocesador(X)
+    filas, roc_data, fitted = [], {}, {}
+    for nombre, clf in construir_modelos().items():
+        pipe = Pipeline([("pre", pre), ("clf", clf)]).fit(X_tr, y_tr)
+        fitted[nombre] = pipe
+        p_te, proba = pipe.predict(X_te), pipe.predict_proba(X_te)[:, 1]
+        p_tr = pipe.predict(X_tr)
+        auc = roc_auc_score(y_te, proba)
+        roc_data[nombre] = (*roc_curve(y_te, proba)[:2], auc)
+        cm = confusion_matrix(y_te, p_te)
+        filas.append({"modelo": nombre, "accuracy": round(accuracy_score(y_te, p_te), 4),
+                      "precision": round(precision_score(y_te, p_te), 4),
+                      "recall": round(recall_score(y_te, p_te), 4),
+                      "f1": round(f1_score(y_te, p_te), 4), "roc_auc": round(auc, 4),
+                      "gini": round(2 * auc - 1, 4), "acc_train": round(accuracy_score(y_tr, p_tr), 4),
+                      "recall_train": round(recall_score(y_tr, p_tr), 4),
+                      "TN": int(cm[0, 0]), "FP": int(cm[0, 1]), "FN": int(cm[1, 0]), "TP": int(cm[1, 1])})
+    tabla = pd.DataFrame(filas)
+    tabla.to_csv(OUT_DIR / "metricas_modelos.csv", index=False)
+    log.info("Comparativa de modelos:\n%s", tabla.to_string(index=False))
+    mejor = tabla.sort_values("f1", ascending=False).iloc[0]["modelo"]
+    best = fitted[mejor]
+    pred_best, proba_best = best.predict(X_te), best.predict_proba(X_te)[:, 1]
+
+    plt.figure(figsize=(6.5, 5.5))
+    for nombre, (fpr, tpr, auc) in roc_data.items():
+        plt.plot(fpr, tpr, label=f"{nombre} (AUC={auc:.3f})")
+    plt.plot([0, 1], [0, 1], "k--", alpha=.4); plt.xlabel("FPR (1 - especificidad)")
+    plt.ylabel("TPR (recall)"); plt.title("Curvas ROC — comparativa de modelos")
+    plt.legend(loc="lower right", fontsize=8); plt.tight_layout()
+    plt.savefig(OUT_DIR / "roc_comparativa.png", dpi=130); plt.close()
+    cm = confusion_matrix(y_te, pred_best)
+    plt.figure(figsize=(5, 4.2))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+                xticklabels=["No churn", "Churn"], yticklabels=["No churn", "Churn"])
+    plt.xlabel("Prediccion"); plt.ylabel("Real"); plt.title(f"Matriz de confusion — {mejor}")
+    plt.tight_layout(); plt.savefig(OUT_DIR / "matriz_confusion_mejor.png", dpi=130); plt.close()
+    try:
+        feat = best.named_steps["pre"].get_feature_names_out()
+        clf = best.named_steps["clf"]
+        imp = (pd.Series(clf.feature_importances_, index=feat) if hasattr(clf, "feature_importances_")
+               else pd.Series(np.abs(clf.coef_[0]), index=feat)).sort_values(ascending=False).head(15)
+        plt.figure(figsize=(7.5, 5.5))
+        sns.barplot(x=imp.values, y=[s.split("__", 1)[-1] for s in imp.index], color="#2563eb")
+        plt.title(f"Top 15 variables — {mejor}"); plt.xlabel("peso"); plt.tight_layout()
+        plt.savefig(OUT_DIR / "importancia_variables.png", dpi=130); plt.close()
+        imp.rename("peso").to_csv(OUT_DIR / "importancia_variables.csv")
+    except Exception as exc:  # pragma: no cover
+        log.warning("No se pudo graficar importancia: %s", exc)
+    predicciones = pd.DataFrame({
+        "customer_id": id_te.values, "churn_real": y_te.values.astype(int),
+        "churn_pred": pred_best.astype(int), "churn_proba": np.round(proba_best, 4),
+        "acierto": (pred_best == y_te.values), "modelo": mejor})
+    predicciones.to_csv(OUT_DIR / "predicciones_test.csv", index=False)
+    with open(OUT_DIR / "resumen_modelo.json", "w", encoding="utf-8") as f:
+        json.dump({"n_total": len(df), "churn_pct": round(100 * y.mean(), 2),
+                   "mejor_modelo_por_f1": mejor, "metricas": tabla.to_dict(orient="records")},
+                  f, ensure_ascii=False, indent=2)
+    return {"tabla": tabla, "mejor": mejor, "predicciones": predicciones}
 
 
 # --------------------------------------------------------------------- main
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Entrena y evalua el modelo de churn")
+    parser = argparse.ArgumentParser(description="Modelo de churn — entrenamiento, evaluacion e inferencia")
     parser.add_argument("--fuente", choices=["csv", "supabase"], default="csv")
-    parser.add_argument("--persistir", action="store_true",
-                        help="Sube las predicciones a la tabla `predicciones` de Supabase")
+    modo = parser.add_mutually_exclusive_group()
+    modo.add_argument("--eval", action="store_true", help="Compara 4 modelos + graficos (informe)")
+    modo.add_argument("--train", action="store_true", help="Entrena el modelo final y lo guarda en Supabase")
+    modo.add_argument("--predict", action="store_true", help="Carga el modelo guardado y predice (sin re-entrenar)")
+    parser.add_argument("--persistir", action="store_true", help="(con --eval) sube las predicciones a Supabase")
     args = parser.parse_args()
 
     df = cargar_datos(args.fuente)
-    analisis_exploratorio(df)
-    res = entrenar_y_evaluar(df)
-    if args.persistir:
-        persistir_predicciones(res["predicciones"])
-    log.info("Modelado completado. Artefactos en %s", OUT_DIR.relative_to(PROJECT_ROOT).as_posix())
+
+    if args.train:
+        pipe, met = entrenar_modelo(df)
+        guardar_modelo_supabase(pipe, met)
+        log.info("ENTRENAMIENTO OK | %s", met)
+    elif args.predict:
+        pipe, _ = cargar_modelo_supabase()
+        pred = predecir_df(pipe, df)
+        n = persistir_predicciones(pred)
+        log.info("PREDICCION OK | %d clientes puntuados (sin re-entrenar)", n)
+    else:  # --eval (por defecto)
+        analisis_exploratorio(df)
+        res = entrenar_y_evaluar(df)
+        if args.persistir:
+            persistir_predicciones(res["predicciones"])
+        log.info("EVALUACION OK. Artefactos en %s", OUT_DIR.relative_to(PROJECT_ROOT).as_posix())
     return 0
 
 

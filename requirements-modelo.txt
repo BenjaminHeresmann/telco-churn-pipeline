@@ -1,0 +1,12 @@
+# Microservicios del modelo (trainer / predictor) — imagen de serving liviana.
+# scikit-learn DEBE ser la misma version con que se entreno (evita errores al
+# deserializar el modelo guardado).
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+pandas==2.1.4
+numpy==1.26.4
+scikit-learn==1.9.0
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+joblib>=1.3

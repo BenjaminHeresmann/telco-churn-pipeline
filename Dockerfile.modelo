@@ -1,0 +1,16 @@
+# Microservicio del modelo de churn (trainer o predictor segun la variable ROL).
+# La MISMA imagen se despliega dos veces con distinto ROL — igual que el patron
+# "mismo contenedor, distinto comando por capa" del pipeline de Eval 2.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements-modelo.txt ./requirements-modelo.txt
+RUN pip install --no-cache-dir -r requirements-modelo.txt
+
+# Codigo: modelo.py (logica) + serve_modelo.py (API) + utils + carga_bd (conexion)
+COPY src/ ./src/
+
+EXPOSE 8000
+# uvicorn carga serve_modelo:app; el ROL (trainer/predictor) viene de env.
+CMD ["sh", "-c", "uvicorn serve_modelo:app --app-dir src --host 0.0.0.0 --port ${PORT:-8000}"]

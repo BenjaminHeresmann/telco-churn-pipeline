@@ -9,6 +9,7 @@ Ejecutar:
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -60,14 +61,16 @@ def cargar():
         logs = pd.read_sql("SELECT * FROM carga_logs ORDER BY fecha_ejecucion DESC LIMIT 1", eng)
         with eng.connect() as cn:
             n_rech = cn.execute(text("SELECT COUNT(*) FROM clientes_rechazados")).scalar()
-        return pred, logs, n_rech, "Supabase (en vivo)"
+            r = cn.execute(text("SELECT metricas FROM modelo_artefacto ORDER BY fecha DESC LIMIT 1")).scalar()
+        met_modelo = (r if isinstance(r, dict) else json.loads(r)) if r else None
+        return pred, logs, n_rech, "Supabase (en vivo)", met_modelo
     except Exception as exc:  # fallback local
         pred = pd.read_csv(OUT / "predicciones_test.csv")
         for col in ["contract", "tenure", "monthly_charges", "internet_service",
                     "payment_method", "senior_citizen", "tenure_group"]:
             if col not in pred.columns:
                 pred[col] = None
-        return pred, pd.DataFrame(), None, f"CSV local (sin BD: {str(exc)[:40]})"
+        return pred, pd.DataFrame(), None, f"CSV local (sin BD: {str(exc)[:40]})", None
 
 
 def metricas(pred: pd.DataFrame) -> dict:
@@ -83,22 +86,25 @@ def metricas(pred: pd.DataFrame) -> dict:
 
 
 # --------------------------------------------------------------------- datos
-pred, logs, n_rech, origen = cargar()
-m = metricas(pred)
+pred, logs, n_rech, origen, met_modelo = cargar()
+# Métricas HONESTAS desde el registro del modelo (holdout); si no hay, se calculan.
+m = {**metricas(pred), **(met_modelo or {})}
+n_eval = int(met_modelo["n_test"]) if met_modelo and met_modelo.get("n_test") else len(pred)
 
 # ------------------------------------------------------------------ cabecera
 st.title("📉 Panel de Riesgo de Abandono — Telco Churn")
 modelo = pred["modelo"].iloc[0] if "modelo" in pred.columns and len(pred) else "—"
 st.caption(f"Modelo en producción: **{modelo}**  ·  Fuente: {origen}  ·  "
-           f"Evaluación sobre {len(pred):,} clientes (conjunto de prueba held-out)")
+           f"Métricas sobre conjunto de prueba (holdout, {n_eval:,}) · "
+           f"scoring de riesgo sobre {len(pred):,} clientes")
 
-# Gini desde la comparativa si existe
-gini = None
+# Gini: del modelo en producción (holdout); si no, de la comparativa
+gini = m.get("gini")
 try:
     comp = pd.read_csv(OUT / "metricas_modelos.csv")
-    fila = comp.loc[comp.modelo == modelo]
-    if len(fila):
-        gini = float(fila.gini.iloc[0])
+    if gini is None:
+        fila = comp.loc[comp.modelo == modelo]
+        gini = float(fila.gini.iloc[0]) if len(fila) else None
 except Exception:
     comp = pd.DataFrame()
 
@@ -124,8 +130,8 @@ with col_a:
                     y=["Real: No churn", "Real: Churn"], aspect="auto")
     fig.update_layout(height=360, coloraxis_showscale=False, margin=dict(l=10, r=10, t=10, b=10))
     st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"🔴 **{m['FN']} Falsos Negativos** = clientes que se van y NO detectamos "
-               f"(el error más caro). ✅ {m['TP']} churners detectados.")
+    st.caption(f"Sobre el conjunto de prueba (holdout). 🔴 **{m['FN']} Falsos Negativos** = "
+               f"clientes que se van y NO detectamos (el error más caro). ✅ {m['TP']} detectados.")
 
 with col_b:
     st.subheader("Top variables que predicen el abandono")

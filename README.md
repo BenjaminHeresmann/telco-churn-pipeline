@@ -20,6 +20,8 @@ Pipeline DataOps **desacoplado** de 4 etapas para preparar el dataset Telco Cust
 | **Presentación Eval 3 — deck (Vercel)** | https://deck-benjaminheresmanns-projects.vercel.app |
 | **Presentación Eval 2 — deck (Vercel)** | https://telco-churn-defensa.vercel.app |
 | **Dashboard BI (Streamlit, en vivo)** | https://telco-dashboard-production.up.railway.app |
+| **Microservicio TRAINER (entrena)** | https://telco-trainer-production.up.railway.app/docs |
+| **Microservicio PREDICTOR (predice)** | https://telco-predictor-production.up.railway.app/docs |
 | **Repositorio (GitHub)** | https://github.com/BenjaminHeresmann/telco-churn-pipeline |
 | **Base de datos** | PostgreSQL gestionado en Supabase (proyecto `telco-churn`) |
 
@@ -348,6 +350,18 @@ python src/benchmark.py
 # Levantar el dashboard BI (http://localhost:8501)
 pip install -r dashboard/requirements.txt
 streamlit run dashboard/app.py
+```
+
+### Modelo como microservicios (train / predict separados)
+
+El modelo se despliega como **dos servicios independientes** ([`src/serve_modelo.py`](src/serve_modelo.py), misma imagen `Dockerfile.modelo`, rol por variable `ROL`) que se comunican **solo vía Supabase** (tabla `modelo_artefacto`) — extendiendo a la capa de IA el patrón "un contenedor por capa" de Eval 2:
+
+- **trainer** (`POST /train`): entrena y **guarda** el modelo en Supabase.
+- **predictor** (`GET /metrics`, `GET /predict/cliente/{id}`, `POST /predict/batch`): **carga** el modelo y predice, **sin re-entrenar**.
+
+```bash
+python src/modelo.py --train      # entrena el modelo final y lo guarda en Supabase
+python src/modelo.py --predict    # carga el modelo guardado y predice (sin re-entrenar)
 ```
 
 Informe completo (12 págs) en [`docs/Informe_Tecnico_Evaluacion3.pdf`](docs/Informe_Tecnico_Evaluacion3.pdf) · deck en [Vercel](https://deck-benjaminheresmanns-projects.vercel.app) · dashboard en vivo en [Railway](https://telco-dashboard-production.up.railway.app) (`Dockerfile.dashboard`, servicio independiente del API).
