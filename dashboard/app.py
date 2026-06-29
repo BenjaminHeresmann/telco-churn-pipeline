@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.request
 from pathlib import Path
 
 import pandas as pd
@@ -40,6 +41,26 @@ def _engine():
         url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return create_engine(url, future=True, pool_pre_ping=True,
                          connect_args={"connect_timeout": 8})
+
+
+# Microservicios del modelo (para la demo en vivo). Por defecto, los desplegados.
+TRAINER_URL = os.getenv("TRAINER_URL", "https://telco-trainer-production.up.railway.app")
+PREDICTOR_URL = os.getenv("PREDICTOR_URL", "https://telco-predictor-production.up.railway.app")
+
+
+def _post(url: str, timeout: int = 120) -> dict:
+    """POST sin cuerpo a un microservicio del modelo y devuelve el JSON."""
+    req = urllib.request.Request(url, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode())
+
+
+def _vaciar_predicciones() -> None:
+    """Vacía la tabla `predicciones` (para arrancar la demo desde cero)."""
+    eng = _engine()
+    if eng is not None:
+        with eng.begin() as c:
+            c.execute(text("TRUNCATE TABLE predicciones"))
 
 
 @st.cache_data(ttl=300, show_spinner="Cargando datos desde Supabase…")
@@ -97,6 +118,45 @@ modelo = pred["modelo"].iloc[0] if "modelo" in pred.columns and len(pred) else "
 st.caption(f"Modelo en producción: **{modelo}**  ·  Fuente: {origen}  ·  "
            f"Métricas sobre conjunto de prueba (holdout, {n_eval:,}) · "
            f"scoring de riesgo sobre {len(pred):,} clientes")
+
+# ------------------------------------------------- panel de demo en vivo
+with st.container():
+    b1, b2, b3 = st.columns([1.3, 1.3, 1.4])
+    if b1.button("🔧 1. Entrenar modelo", use_container_width=True,
+                 help="Llama al microservicio trainer (POST /train)"):
+        with st.spinner("Entrenando el modelo en la nube…"):
+            try:
+                res = _post(f"{TRAINER_URL}/train", timeout=120)
+                rec = res.get("metricas_holdout", {}).get("recall", 0) * 100
+                st.cache_data.clear()
+                st.success(f"✅ Modelo entrenado y guardado en Supabase · recall {rec:.1f}%. "
+                           f"Ahora pulsa **▶ Ejecutar predicción**.")
+            except Exception as e:
+                st.error(f"No se pudo entrenar: {e}")
+    if b2.button("▶ 2. Ejecutar predicción", type="primary", use_container_width=True,
+                 help="Llama al microservicio predictor (POST /predict/batch)"):
+        with st.spinner("Puntuando a los clientes en vivo…"):
+            try:
+                try:
+                    _post(f"{PREDICTOR_URL}/reload", timeout=60)  # usar el modelo más reciente
+                except Exception:
+                    pass
+                res = _post(f"{PREDICTOR_URL}/predict/batch", timeout=120)
+                st.cache_data.clear()
+                st.toast(f"✅ {res.get('clientes_puntuados', 0):,} clientes puntuados · "
+                         f"{res.get('en_riesgo', 0):,} en riesgo", icon="🎯")
+                st.rerun()
+            except Exception as e:
+                st.error(f"No se pudo predecir: {e}")
+    with b3.expander("⚙️ Preparar demo (vaciar)"):
+        if st.button("🧹 Vaciar predicciones para empezar de cero"):
+            _vaciar_predicciones()
+            st.cache_data.clear()
+            st.rerun()
+
+if len(pred) == 0:
+    st.warning("📭 **El panel está esperando una predicción.** Pulsa **▶ Ejecutar predicción** "
+               "para puntuar a los clientes en vivo y ver el dashboard llenarse.")
 
 # Gini: del modelo en producción (holdout); si no, de la comparativa
 gini = m.get("gini")

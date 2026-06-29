@@ -15,12 +15,14 @@ ir a cualquiera. **No leer las slides.**
 | 6:30–8:15 | **Seguridad + Ley 21.719** | Benjamín | 4 frentes: 0 secretos (grep+git), **RLS cerrado por defecto**, pip-audit (10 CVEs), logs. Privilegio mínimo (rol solo-lectura). **Compliance by design** hacia la Ley 21.719 (nivel GDPR, vigencia 01-12-2026). |
 | 8:15–10:00 | **Rendimiento + Limitaciones/mejoras** | Diego | Benchmark: **cuello de botella = latencia de red** (3,9s nube vs 0,018s local), no el cómputo. Limitaciones (overfit RF, precisión baja, latencia) → mejoras priorizadas (ajuste de umbral, regularizar, actualizar deps). |
 
-## Demo en vivo (5 min) — alternando
-**ANTES:** despertar Railway + Supabase + tener `localhost:8501` abierto y probado. Plan B: capturas.
+## Demo en vivo (5 min) — el sistema construyéndose EN VIVO
+**ANTES (clave):** despertar los **4 servicios Railway** (api, dashboard, trainer, predictor) + Supabase + el deck, abriendo cada URL una vez (~30s de arranque frío c/u). En el dashboard, abrir "⚙️ Preparar demo" → **🧹 Vaciar predicciones** para empezar de cero. **Plan B:** capturas + dejar la base ya poblada por si falla la red.
 
-1. **(1 min) Pipeline en producción** — Swagger en Railway (`/docs`): mostrar los endpoints; opcional `POST /pipeline/run` → 4 etapas OK, 7.043 cargados.
-2. **(1 min) Datos + predicciones en Supabase** — tabla `clientes` (7.043) y tabla `predicciones` (2.113 con probabilidad/clase/acierto).
-3. **(3 min) Dashboard BI** (`streamlit run dashboard/app.py`) — KPIs (recall 79,7%), **matriz de confusión** interactiva, **tabla filtrable de errores** (filtrar Falsos Negativos), **embudo de volumen por etapa**. Cerrar conectando un hallazgo del dashboard con una decisión de retención.
+1. **(1,5 min) Pipeline — Fase 1** — Swagger del API en Railway (`/docs`): `POST /pipeline/run` → 4 etapas OK, **7.043 clientes** cargados en Supabase. (La base de datos.)
+2. **(1,5 min) Entrenar el modelo EN VIVO** — en el dashboard (https://telco-dashboard-production.up.railway.app), botón **🔧 Entrenar modelo** → llama al **microservicio trainer**, entrena y guarda el modelo → "recall 79,7%". (El cerebro.)
+3. **(2 min) Predecir EN VIVO** — el panel está **vacío** ("esperando una predicción"). Pulsar **▶ Ejecutar predicción** → llama al **microservicio predictor** y el dashboard **se llena solo**: KPIs, matriz de confusión, **tabla filtrable de errores** (filtrar Falsos Negativos), embudo por etapa, **2.914 clientes en riesgo**. (La cara visible.) Cerrar conectando un hallazgo con una decisión de retención.
+
+> Narrativa: *"pipeline → entrenamiento → predicción → dashboard"*, cada paso disparado en vivo, demostrando que las piezas son reales y están conectadas (no precargadas).
 
 ---
 
