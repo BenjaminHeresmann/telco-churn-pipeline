@@ -56,35 +56,47 @@ def _post(url: str, timeout: int = 120) -> dict:
 
 
 def _vaciar_predicciones() -> None:
-    """Vacía la tabla `predicciones` (para arrancar la demo desde cero)."""
+    """Vacía solo la tabla `predicciones` (mantiene el modelo entrenado)."""
     eng = _engine()
     if eng is not None:
         with eng.begin() as c:
             c.execute(text("TRUNCATE TABLE predicciones"))
 
 
-def _count_predicciones() -> int:
-    """Cuenta filas de `predicciones` (sin caché, para detectar datos nuevos)."""
+def _vaciar_todo() -> None:
+    """Vacía modelo + predicciones: el panel queda 100% en blanco para la demo."""
+    eng = _engine()
+    if eng is not None:
+        with eng.begin() as c:
+            c.execute(text("TRUNCATE TABLE predicciones"))
+            try:
+                c.execute(text("TRUNCATE TABLE modelo_artefacto"))
+            except Exception:
+                pass  # la tabla podría no existir todavía
+
+
+def _count(tabla: str) -> int:
+    """Cuenta filas de una tabla (sin caché, para detectar cambios en vivo)."""
     eng = _engine()
     if eng is None:
         return -1
     try:
         with eng.connect() as c:
-            return int(c.execute(text("SELECT COUNT(*) FROM predicciones")).scalar())
+            return int(c.execute(text(f"SELECT COUNT(*) FROM {tabla}")).scalar())
     except Exception:
         return -1
 
 
 @st.fragment(run_every=3)
-def _auto_fill_watcher():
-    """Mientras el panel está vacío, vigila `predicciones` cada 3s. Cuando aparecen
-    filas (p. ej. tras llamar POST /predict/batch desde el Swagger del predictor),
+def _auto_fill_watcher(hay_modelo_actual: bool, n_pred_actual: int):
+    """Mientras el panel está incompleto, vigila `modelo_artefacto` y `predicciones`
+    cada 3s; cuando cambian (p. ej. tras /train o /predict/batch desde el Swagger),
     recarga el dashboard completo para que se llene solo."""
-    if _count_predicciones() > 0:
+    if (_count("modelo_artefacto") > 0) != hay_modelo_actual or _count("predicciones") != n_pred_actual:
         st.cache_data.clear()
         st.rerun(scope="app")
-    st.caption("⏳ Vigilando… el panel se llenará automáticamente al ejecutar la predicción "
-               "(desde el botón o desde el Swagger del predictor).")
+    st.caption("⏳ Vigilando… el panel se actualizará solo al entrenar o predecir "
+               "(desde los botones o desde los Swagger).")
 
 
 @st.cache_data(ttl=300, show_spinner="Cargando datos desde Supabase…")
@@ -135,6 +147,7 @@ pred, logs, n_rech, origen, met_modelo = cargar()
 # Métricas HONESTAS desde el registro del modelo (holdout); si no hay, se calculan.
 m = {**metricas(pred), **(met_modelo or {})}
 n_eval = int(met_modelo["n_test"]) if met_modelo and met_modelo.get("n_test") else len(pred)
+hay_modelo = met_modelo is not None
 
 # ------------------------------------------------------------------ cabecera
 st.title("📉 Panel de Riesgo de Abandono — Telco Churn")
@@ -173,20 +186,29 @@ with st.container():
             except Exception as e:
                 st.error(f"No se pudo predecir: {e}")
     with b3.expander("⚙️ Preparar demo (vaciar)"):
-        if st.button("🧹 Vaciar predicciones para empezar de cero"):
+        if st.button("🧹 Vaciar predicciones (mantener modelo)"):
             _vaciar_predicciones()
             st.cache_data.clear()
             st.rerun()
+        if st.button("🧨 Vaciar TODO (modelo + predicciones)"):
+            _vaciar_todo()
+            st.cache_data.clear()
+            st.rerun()
 
-if len(pred) == 0:
+if not hay_modelo:
+    st.warning("📭 **No hay modelo entrenado.** Entrénalo desde el **Swagger del trainer** "
+               "(`POST /train`) o el botón **🔧 Entrenar**; luego ejecuta la predicción. "
+               "El panel se irá llenando solo, paso a paso.")
+elif len(pred) == 0:
     cw, cb = st.columns([5, 1])
-    cw.warning("📭 **El panel está esperando una predicción.** Lánzala desde el botón "
-               "**▶ Ejecutar predicción**, o desde el **Swagger del predictor** "
-               "(`POST /predict/batch`): el panel **se llenará solo**.")
+    cw.warning("📭 **Modelo listo — esperando la predicción.** Lánzala desde el **Swagger del "
+               "predictor** (`POST /predict/batch`) o el botón **▶ Ejecutar predicción**: "
+               "el panel **se llena solo**.")
     if cb.button("🔄 Actualizar", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    _auto_fill_watcher()
+if not hay_modelo or len(pred) == 0:
+    _auto_fill_watcher(hay_modelo, len(pred))
 
 # Gini: del modelo en producción (holdout); si no, de la comparativa
 gini = m.get("gini")
@@ -200,10 +222,10 @@ except Exception:
 
 # --------------------------------------------------------------------- KPIs
 c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Recall (prioritaria)", f"{m['recall']*100:.1f}%", help="De los que se van, cuántos detectamos. Es la métrica clave en retención.")
-c2.metric("F1-score", f"{m['f1']:.3f}")
-c3.metric("Precision", f"{m['precision']*100:.1f}%")
-c4.metric("Accuracy", f"{m['accuracy']*100:.1f}%", help="Engañosa con desbalance: 'todo No-churn' daría ~73,5%.")
+c1.metric("Recall (prioritaria)", f"{m['recall']*100:.1f}%" if hay_modelo else "—", help="De los que se van, cuántos detectamos. Es la métrica clave en retención.")
+c2.metric("F1-score", f"{m['f1']:.3f}" if hay_modelo else "—")
+c3.metric("Precision", f"{m['precision']*100:.1f}%" if hay_modelo else "—")
+c4.metric("Accuracy", f"{m['accuracy']*100:.1f}%" if hay_modelo else "—", help="Engañosa con desbalance: 'todo No-churn' daría ~73,5%.")
 c5.metric("Gini", f"{gini:.3f}" if gini is not None else "—")
 c6.metric("Clientes en riesgo", f"{int((pred.churn_pred==1).sum()):,}", help="Predichos como churn → foco de retención.")
 
@@ -214,26 +236,32 @@ col_a, col_b = st.columns([1, 1.2])
 
 with col_a:
     st.subheader("Matriz de confusión")
-    cm = [[m["TN"], m["FP"]], [m["FN"], m["TP"]]]
-    fig = px.imshow(cm, text_auto=True, color_continuous_scale="Blues",
-                    x=["Pred: No churn", "Pred: Churn"],
-                    y=["Real: No churn", "Real: Churn"], aspect="auto")
-    fig.update_layout(height=360, coloraxis_showscale=False, margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"Sobre el conjunto de prueba (holdout). 🔴 **{m['FN']} Falsos Negativos** = "
-               f"clientes que se van y NO detectamos (el error más caro). ✅ {m['TP']} detectados.")
+    if hay_modelo:
+        cm = [[m["TN"], m["FP"]], [m["FN"], m["TP"]]]
+        fig = px.imshow(cm, text_auto=True, color_continuous_scale="Blues",
+                        x=["Pred: No churn", "Pred: Churn"],
+                        y=["Real: No churn", "Real: Churn"], aspect="auto")
+        fig.update_layout(height=360, coloraxis_showscale=False, margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(f"Sobre el conjunto de prueba (holdout). 🔴 **{m['FN']} Falsos Negativos** = "
+                   f"clientes que se van y NO detectamos (el error más caro). ✅ {m['TP']} detectados.")
+    else:
+        st.info("Entrena el modelo para ver su evaluación (matriz de confusión).")
 
 with col_b:
     st.subheader("Top variables que predicen el abandono")
-    try:
-        imp = pd.read_csv(OUT / "importancia_variables.csv", index_col=0).head(10)
-        imp.index = [i.split("__", 1)[-1] for i in imp.index]
-        fig = px.bar(imp.iloc[::-1], x="peso", orientation="h", color_discrete_sequence=[AZUL])
-        fig.update_layout(height=360, showlegend=False, yaxis_title="", xaxis_title="peso",
-                          margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.info(f"Sin importancia de variables ({e})")
+    if not hay_modelo:
+        st.info("Entrena el modelo para ver las variables más influyentes.")
+    else:
+        try:
+            imp = pd.read_csv(OUT / "importancia_variables.csv", index_col=0).head(10)
+            imp.index = [i.split("__", 1)[-1] for i in imp.index]
+            fig = px.bar(imp.iloc[::-1], x="peso", orientation="h", color_discrete_sequence=[AZUL])
+            fig.update_layout(height=360, showlegend=False, yaxis_title="", xaxis_title="peso",
+                              margin=dict(l=10, r=10, t=10, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.info(f"Sin importancia de variables ({e})")
 
 # ------------------------------------------------- fila 2: segmentos + modelos
 col_c, col_d = st.columns(2)
