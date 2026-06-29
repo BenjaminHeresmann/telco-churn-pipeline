@@ -5,8 +5,10 @@ Pipeline DataOps **desacoplado** de 4 etapas para preparar el dataset Telco Cust
 **Arquitectura cloud-native:** API REST en Railway + PostgreSQL gestionado en Supabase + CI/CD vía GitHub Actions. Cero monolito, cada componente despliega y escala independientemente.
 
 **Asignatura:** ITY1101 Gestión de Datos para IA - Duoc UC
-**Evaluación:** Parcial N°2
+**Evaluación:** Parcial N°2 (pipeline DataOps) + Parcial N°3 (modelo IA · BI · seguridad)
 **Equipo:** Benjamín Heresmann, Diego Hernández (equipo de 2 autorizado por el docente)
+
+> **Evaluación 3** construye sobre este pipeline: entrena un modelo de churn (recall **79,7%**), lo expone en un **dashboard BI**, audita la seguridad frente a la **Ley 21.719** y mide el rendimiento en la nube. Ver la sección [Evaluación 3](#evaluación-3-modelo-de-ia-bi-y-seguridad).
 
 ## 🚀 Desplegado y funcionando
 
@@ -15,7 +17,9 @@ Pipeline DataOps **desacoplado** de 4 etapas para preparar el dataset Telco Cust
 | **API en producción (Railway)** | https://telco-api-production-e466.up.railway.app |
 | **Documentación interactiva (Swagger)** | https://telco-api-production-e466.up.railway.app/docs |
 | **Health check** | https://telco-api-production-e466.up.railway.app/health |
-| **Presentación de la defensa (Vercel)** | https://telco-churn-defensa.vercel.app |
+| **Presentación Eval 3 — deck (Vercel)** | https://deck-benjaminheresmanns-projects.vercel.app |
+| **Presentación Eval 2 — deck (Vercel)** | https://telco-churn-defensa.vercel.app |
+| **Dashboard BI (Streamlit)** | local: `streamlit run dashboard/app.py` → http://localhost:8501 |
 | **Repositorio (GitHub)** | https://github.com/BenjaminHeresmann/telco-churn-pipeline |
 | **Base de datos** | PostgreSQL gestionado en Supabase (proyecto `telco-churn`) |
 
@@ -121,6 +125,9 @@ CSV fuente (data/source/ en repo · o Supabase Storage si se configura)
 | BD gestionada | PostgreSQL (Supabase) | 17 |
 | Host backend | Railway | - |
 | CI/CD | GitHub Actions | v4 |
+| Modelado IA (EV3) | scikit-learn | 1.9 |
+| Visualización (EV3) | matplotlib · seaborn | 3.11 · 0.13 |
+| Dashboard BI (EV3) | Streamlit · Plotly | 1.49 · 6 |
 | Seguimiento proyecto | Trello | - |
 
 ---
@@ -150,12 +157,26 @@ telco-churn-pipeline/
 │   ├── validacion.py               Etapa 3
 │   ├── carga_bd.py                 Etapa 4 (Supabase Postgres con SSL, idempotente)
 │   ├── run_pipeline.py             Orquestador CLI standalone
+│   ├── modelo.py                   ★ EV3 - entrena/evalua modelo churn + persiste predicciones
+│   ├── benchmark.py                ★ EV3 - analisis de rendimiento en la nube (psutil)
 │   └── utils/
 │       ├── logger.py               Logger centralizado
 │       ├── schema.py               Schema pandera + reglas semanticas
 │       └── supabase_client.py      Cliente Storage (opcional)
+├── dashboard/                      ★ EV3 - dashboard BI (Streamlit + Plotly)
+│   ├── app.py                      Panel conectado a Supabase (predicciones)
+│   └── requirements.txt            Deps del dashboard (deployable aparte)
+├── deck/
+│   └── index.html                  ★ EV3 - deck de defensa (HTML 4:3 + Chart.js)
+├── outputs/                        ★ EV3 - artefactos reproducibles
+│   ├── modelo/                     Metricas, graficos, predicciones del modelo
+│   ├── seguridad/                  Auditoria de seguridad + pip-audit
+│   ├── rendimiento/                Benchmark (psutil)
+│   ├── limitaciones_mejoras.md     Limitaciones + propuestas de mejora
+│   └── guion_defensa.md            Guion de la defensa (15 min)
 ├── sql/
-│   └── 01_create_tables.sql        DDL Postgres (ejecutar en Supabase SQL Editor)
+│   ├── 01_create_tables.sql        DDL Postgres (ejecutar en Supabase SQL Editor)
+│   └── 02_roles_seguridad.sql      ★ EV3 - rol de solo lectura (privilegio minimo)
 ├── scripts/
 │   ├── gen_diagramas.py            Renderiza los diagramas Mermaid a PNG
 │   ├── setup_supabase.py           Aplica DDL (y sube CSV a Storage si aplica)
@@ -163,7 +184,8 @@ telco-churn-pipeline/
 ├── tests/
 │   └── test_validaciones.py        Tests unitarios (corren en GitHub Actions)
 └── docs/
-    ├── Informe_Tecnico_Evaluacion2.pdf   Informe academico (entregable)
+    ├── Informe_Tecnico_Evaluacion2.pdf   Informe academico Eval 2 (entregable)
+    ├── Informe_Tecnico_Evaluacion3.pdf   ★ EV3 - Informe academico Eval 3 (12 pags)
     ├── diagramas.md                      Fuente Mermaid de los diagramas
     ├── DEPLOY.md                         Guia paso-a-paso de deploy cloud
     ├── img/                              Diagramas + evidencias (capturas)
@@ -298,20 +320,46 @@ pytest tests/ -v
 - **Dockerfile reproducible**: pin de versiones, no `latest`.
 - **Logs estructurados** sin datos personales.
 
-Ver detalle del plan de seguridad en el [informe técnico](docs/Informe_Tecnico_Evaluacion2.pdf).
+Ver detalle del plan de seguridad en el [informe técnico](docs/Informe_Tecnico_Evaluacion2.pdf). La **auditoría de seguridad de Evaluación 3** (4 frentes + Ley 21.719) está en [`outputs/seguridad/auditoria_seguridad.md`](outputs/seguridad/auditoria_seguridad.md).
 
 ---
 
-## Continuidad con Evaluación 3
+## Evaluación 3: modelo de IA, BI y seguridad
 
-La tabla `clientes` queda lista para entrenar un modelo de clasificación binaria sobre `churn`. Variables candidatas: `tenure`, `contract`, `monthly_charges`, `internet_service`, `payment_method`. La API puede extenderse con un endpoint `/model/train` y `/model/predict` reutilizando la misma infraestructura cloud.
+La Evaluación 3 construye **sobre el mismo pipeline**: usa los 7.043 clientes ya curados en `clientes` para entrenar un modelo, lo expone en BI y audita la seguridad del sistema.
+
+| Componente | Archivo | Qué hace |
+|---|---|---|
+| **Modelo de churn** | [`src/modelo.py`](src/modelo.py) | Clasificación binaria supervisada. Baseline (Reg. Logística, Árbol) + mejora (Random Forest, Reg. Logística balanceada). Lee `clientes` desde Supabase, entrena con split **70/30 estratificado** y persiste las predicciones en la tabla `predicciones`. |
+| **Dashboard BI** | [`dashboard/app.py`](dashboard/app.py) | Panel **Streamlit + Plotly** conectado a Supabase: KPIs, matriz de confusión, tabla filtrable de errores y embudo de volumen por etapa. |
+| **Seguridad + Ley 21.719** | [`outputs/seguridad/`](outputs/seguridad/) · [`sql/02_roles_seguridad.sql`](sql/02_roles_seguridad.sql) | Auditoría en 4 frentes (credenciales, accesos/RLS, dependencias, logs) + rol de solo lectura (privilegio mínimo) + mapeo *compliance by design* a la nueva ley de datos personales. |
+| **Rendimiento nube** | [`src/benchmark.py`](src/benchmark.py) | Mide con `psutil`/`time` el costo de cada operación (lectura local vs nube vs entrenamiento). |
+
+**Modelo elegido:** Regresión Logística balanceada — **recall 79,7%**, F1 0,62, **Gini 0,69**, ROC-AUC 0,85 (sobre el conjunto de prueba). Se prioriza el recall porque el falso negativo —un cliente que se va sin detectar— es el error más caro en retención.
+
+**Cómo ejecutarlo** (requiere `.env` con `DATABASE_URL` y las deps de `requirements.txt`):
+```bash
+# Entrenar el modelo desde Supabase y persistir las predicciones
+python src/modelo.py --fuente supabase --persistir
+
+# Medir el rendimiento
+python src/benchmark.py
+
+# Levantar el dashboard BI (http://localhost:8501)
+pip install -r dashboard/requirements.txt
+streamlit run dashboard/app.py
+```
+
+Informe completo (12 págs) en [`docs/Informe_Tecnico_Evaluacion3.pdf`](docs/Informe_Tecnico_Evaluacion3.pdf) · deck en [Vercel](https://deck-benjaminheresmanns-projects.vercel.app).
 
 ---
 
 ## Referencias
 
 - Dataset: IBM Sample Data Sets - Telco Customer Churn (Kaggle)
-- Material del curso: PDFs 2.1 a 2.4 - Pipeline de Datos
+- Material del curso (Eval 2): PDFs 2.1 a 2.4 - Pipeline de Datos
+- Material del curso (Eval 3): 3.1 a 3.4 - Modelo IA supervisado, rendimiento, seguridad, visualización
+- scikit-learn docs: https://scikit-learn.org · Streamlit: https://streamlit.io
 - Supabase docs: https://supabase.com/docs
 - Railway docs: https://docs.railway.app
 - FastAPI docs: https://fastapi.tiangolo.com
