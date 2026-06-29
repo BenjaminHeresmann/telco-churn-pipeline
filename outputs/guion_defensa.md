@@ -20,7 +20,10 @@ ir a cualquiera. **No leer las slides.**
 
 1. **(1,5 min) Pipeline — Fase 1** — Swagger del API en Railway (`/docs`): `POST /pipeline/run` → 4 etapas OK, **7.043 clientes** cargados en Supabase. (La base de datos.)
 2. **(1,5 min) Entrenar el modelo EN VIVO** — en el dashboard (https://telco-dashboard-production.up.railway.app), botón **🔧 Entrenar modelo** → llama al **microservicio trainer**, entrena y guarda el modelo → "recall 79,7%". (El cerebro.)
-3. **(2 min) Predecir EN VIVO** — el panel está **vacío** ("esperando una predicción"). Pulsar **▶ Ejecutar predicción** → llama al **microservicio predictor** y el dashboard **se llena solo**: KPIs, matriz de confusión, **tabla filtrable de errores** (filtrar Falsos Negativos), embudo por etapa, **2.914 clientes en riesgo**. (La cara visible.) Cerrar conectando un hallazgo con una decisión de retención.
+3. **(2 min) Predecir EN VIVO** — el panel está **vacío** ("esperando una predicción"). Dos formas (elegir una):
+   - **(más técnica, recomendada)** ir al **Swagger del predictor** → `POST /predict/batch` → el dashboard **se llena solo** (auto-refresh cada 3s detecta los datos nuevos). Demuestra los 3 servicios separados.
+   - **(comodín)** pulsar **▶ Ejecutar predicción** en el propio dashboard.
+   Aparecen: KPIs, matriz de confusión, **tabla filtrable de errores** (filtrar Falsos Negativos), embudo por etapa, **2.914 clientes en riesgo**. (La cara visible.) Cerrar conectando un hallazgo con una decisión de retención.
 
 > Narrativa: *"pipeline → entrenamiento → predicción → dashboard"*, cada paso disparado en vivo, demostrando que las piezas son reales y están conectadas (no precargadas).
 

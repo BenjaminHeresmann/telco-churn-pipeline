@@ -63,6 +63,30 @@ def _vaciar_predicciones() -> None:
             c.execute(text("TRUNCATE TABLE predicciones"))
 
 
+def _count_predicciones() -> int:
+    """Cuenta filas de `predicciones` (sin caché, para detectar datos nuevos)."""
+    eng = _engine()
+    if eng is None:
+        return -1
+    try:
+        with eng.connect() as c:
+            return int(c.execute(text("SELECT COUNT(*) FROM predicciones")).scalar())
+    except Exception:
+        return -1
+
+
+@st.fragment(run_every=3)
+def _auto_fill_watcher():
+    """Mientras el panel está vacío, vigila `predicciones` cada 3s. Cuando aparecen
+    filas (p. ej. tras llamar POST /predict/batch desde el Swagger del predictor),
+    recarga el dashboard completo para que se llene solo."""
+    if _count_predicciones() > 0:
+        st.cache_data.clear()
+        st.rerun(scope="app")
+    st.caption("⏳ Vigilando… el panel se llenará automáticamente al ejecutar la predicción "
+               "(desde el botón o desde el Swagger del predictor).")
+
+
 @st.cache_data(ttl=300, show_spinner="Cargando datos desde Supabase…")
 def cargar():
     """Devuelve (predicciones+segmento, carga_logs, n_rechazados, origen)."""
@@ -155,8 +179,14 @@ with st.container():
             st.rerun()
 
 if len(pred) == 0:
-    st.warning("📭 **El panel está esperando una predicción.** Pulsa **▶ Ejecutar predicción** "
-               "para puntuar a los clientes en vivo y ver el dashboard llenarse.")
+    cw, cb = st.columns([5, 1])
+    cw.warning("📭 **El panel está esperando una predicción.** Lánzala desde el botón "
+               "**▶ Ejecutar predicción**, o desde el **Swagger del predictor** "
+               "(`POST /predict/batch`): el panel **se llenará solo**.")
+    if cb.button("🔄 Actualizar", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    _auto_fill_watcher()
 
 # Gini: del modelo en producción (holdout); si no, de la comparativa
 gini = m.get("gini")
