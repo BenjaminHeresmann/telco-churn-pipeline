@@ -259,7 +259,24 @@ ul li::before{content:"";position:absolute;left:0;top:.8vh;width:.8vw;height:.8v
   <div class="foot"><span class="presenter">🎤 Ambos</span><span>versionable en GitHub · demostrable por URL</span></div>
 </section>
 
-<!-- 12 · CIERRE -->
+<!-- 12 · MICROSERVICIOS -->
+<section class="slide">
+  <div class="eyebrow anim">Arquitectura · más allá de lo pedido</div>
+  <h2 class="anim">El modelo como <span class="grad">microservicios</span> · train / predict separados</h2>
+  <div class="anim row" style="margin-top:2.5vh;justify-content:center;gap:1vw;flex-wrap:wrap">
+    <span class="pill">trainer · /train</span><span class="muted">→</span>
+    <span class="pill tag-ok">Supabase · modelo_artefacto</span><span class="muted">→</span>
+    <span class="pill">predictor · /predict</span>
+  </div>
+  <div class="cards c2 stagger" style="margin-top:3vh">
+    <div class="card"><div class="ico">🎓</div><div class="k" style="font-size:1.6vw">Servicio trainer</div><div class="l"><code>POST /train</code> — entrena y guarda el modelo en Supabase</div></div>
+    <div class="card"><div class="ico">⚡</div><div class="k" style="font-size:1.6vw">Servicio predictor</div><div class="l"><code>/metrics · /predict/cliente · /predict/batch</code> — carga el modelo y predice <b>sin re-entrenar</b></div></div>
+  </div>
+  <p class="anim" style="margin-top:3vh;font-size:1.5vw">Misma imagen, <b>dos despliegues</b> (rol por variable de entorno): extendemos a la capa de IA el principio de <b class="grad">un contenedor por responsabilidad</b> del pipeline de Eval 2.</p>
+  <div class="foot"><span class="presenter">🎤 Benjamín</span><span>se comunican solo vía Supabase · entrenamiento offline / inferencia bajo demanda</span></div>
+</section>
+
+<!-- 13 · CIERRE -->
 <section class="slide">
   <div class="eyebrow anim">Limitaciones, mejoras y cierre</div>
   <h2 class="anim">Un sistema <span class="grad">completo, honesto y mejorable</span></h2>
@@ -279,7 +296,7 @@ ul li::before{content:"";position:absolute;left:0;top:.8vh;width:.8vw;height:.8v
         <li>Ajustar umbral de decisión / rankear por riesgo</li>
         <li>Regularizar el RF</li>
         <li>Cachear lecturas · actualizar dependencias</li>
-        <li>Endpoint <code>/model/predict</code> en la API</li>
+        <li>Validación cruzada (k-fold) y más features</li>
       </ul>
     </div>
   </div>
