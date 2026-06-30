@@ -1,0 +1,1439 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'><style>
+body{font-family:'Calibri','Arial',sans-serif;font-size:11pt;line-height:1.5;color:#1a1a2e;margin:2.2cm 2cm;}
+h1{color:#1F4E79;font-size:24pt;border-bottom:3px solid #1F4E79;padding-bottom:6px;}
+h2{color:#1F4E79;font-size:17pt;border-bottom:1px solid #bcd;padding-bottom:4px;margin-top:22px;}
+h3{color:#2E75B6;font-size:13pt;margin-top:16px;} h4{color:#2E75B6;font-size:11.5pt;}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:10pt;}
+th{background:#1F4E79;color:#fff;padding:6px 9px;text-align:left;border:1px solid #1F4E79;}
+td{padding:5px 9px;border:1px solid #cdd6e0;vertical-align:top;}
+tr:nth-child(even) td{background:#f4f7fb;}
+code{font-family:'Consolas',monospace;background:#eef2f7;color:#b3216a;padding:1px 4px;border-radius:3px;font-size:9.5pt;}
+pre{background:#0f2440;color:#e8eefc;padding:10px 12px;border-radius:6px;font-size:9pt;}
+pre code{background:none;color:#e8eefc;padding:0;}
+blockquote{background:#fff8e1;border-left:4px solid #f5b301;margin:10px 0;padding:8px 14px;}
+a{color:#2E75B6;text-decoration:none;} hr{border:none;border-top:1px solid #d0d7de;margin:18px 0;}
+</style></head><body><h1>📚 Guía de Estudio — Defensa Evaluación 3</h1>
+<p><strong>Asignatura:</strong> ITY1101 Gestión de Datos para IA · Duoc UC  ·  <strong>Caso:</strong> Telco Customer Churn
+<strong>Equipo:</strong> Benjamín Heresmann · Diego Hernández</p>
+<blockquote>
+<p>Esta guía reúne <strong>todo lo importante para la defensa</strong>: la teoría del curso (módulos 3.1–3.4), la lógica de lo que construimos, cómo funciona y se conecta, el código Python explicado, y un banco de preguntas. Está escrita para <strong>aprender y entender</strong>, no solo para memorizar.</p>
+</blockquote>
+<h2>⚡ El proyecto en 1 minuto</h2>
+<p>Construimos un sistema completo de <strong>predicción de abandono de clientes (churn)</strong>:
+1. Un <strong>pipeline DataOps</strong> (4 etapas) deja <strong>7.043 clientes limpios</strong> en <strong>Supabase</strong> (PostgreSQL).
+2. Un <strong>modelo de IA</strong> (clasificación binaria) aprende a predecir el churn → elegimos <strong>Regresión Logística balanceada</strong> (<strong>recall 79,7%</strong>, F1 0,62, <strong>Gini 0,69</strong>, accuracy 74,2%).
+3. Dos <strong>microservicios</strong> separados: <strong>trainer</strong> (entrena y guarda el modelo) y <strong>predictor</strong> (predice sin re-entrenar), comunicados solo por Supabase.
+4. Un <strong>dashboard BI</strong> (Streamlit) muestra los resultados (KPIs, matriz de confusión, clientes en riesgo).
+5. <strong>Seguridad</strong> auditada (RLS, privilegio mínimo) con enfoque <em>compliance by design</em> hacia la <strong>Ley 21.719</strong>.</p>
+<h2>🎯 Cómo se reparte la nota (¡el 70% es ORAL e individual!)</h2>
+<table>
+<thead>
+<tr>
+<th>Indicador</th>
+<th>Qué evalúa</th>
+<th>Peso</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>8</strong></td>
+<td>Explicar y defender las <strong>MÉTRICAS del modelo</strong> (oral)</td>
+<td><strong>30%</strong></td>
+</tr>
+<tr>
+<td><strong>9</strong></td>
+<td>Defender la <strong>SEGURIDAD + Ley de datos personales</strong> (oral)</td>
+<td><strong>30%</strong></td>
+</tr>
+<tr>
+<td>10</td>
+<td>Cómo implementarían las <strong>mejoras</strong> (oral)</td>
+<td>10%</td>
+</tr>
+<tr>
+<td>1–7</td>
+<td>Informe (15%) + presentación grupal (15%)</td>
+<td>30%</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Regla de oro:</strong> ambos deben dominar <strong>TODO</strong> — el profe pregunta al azar. Foco máximo en los <strong>indicadores 8 (métricas)</strong> y <strong>9 (seguridad+ley)</strong>.</p>
+</blockquote>
+<hr />
+<h2>Índice</h2>
+<ol>
+<li><a href="#fundamentos-de-ia-supervisada-y-métricas-del-modelo">Fundamentos de IA supervisada y métricas del modelo</a></li>
+<li><a href="#arquitectura-del-sistema-cómo-se-conecta-todo">Arquitectura del sistema: cómo se conecta todo</a></li>
+<li><a href="#el-código-python-explicado">El código Python explicado</a></li>
+<li><a href="#análisis-de-rendimiento-en-la-nube">Análisis de rendimiento en la nube</a></li>
+<li><a href="#auditoría-de-seguridad-y-ley-21719">Auditoría de seguridad y Ley 21.719</a></li>
+<li><a href="#integración-bi-el-dashboard-y-limitacionesmejoras">Integración BI, el dashboard, y limitaciones/mejoras</a></li>
+<li><a href="#banco-de-preguntas-y-respuestas-para-la-defensa">Banco de preguntas y respuestas para la defensa</a></li>
+</ol>
+<hr />
+<h2>Fundamentos de IA supervisada y métricas del modelo</h2>
+<blockquote>
+<p><strong>Por qué importa esta sección.</strong> Es el corazón del <strong>indicador 8 (30% de la nota, oral e individual)</strong>. Aquí cada uno tiene que demostrar que <em>entiende</em> el modelo que entrenó: por qué es supervisado, por qué es clasificación, cómo se evaluó y —sobre todo— <strong>por qué elegimos Regresión Logística balanceada en vez de un modelo con "mejor accuracy"</strong>. No basta con leer los números: hay que saber <em>contar la historia</em> detrás de ellos.</p>
+</blockquote>
+<hr />
+<h3>1. ¿Qué es modelar y qué es el aprendizaje supervisado?</h3>
+<p><strong>Modelar</strong> en IA significa construir una <strong>representación matemática que aprende a resolver un problema a partir de datos</strong>. Un modelo no es magia: es un conjunto de reglas o relaciones que transforma <em>datos de entrada</em> (las características del cliente) en una <em>salida útil</em> (¿se va a ir o no?).</p>
+<p>La clave está en <em>cómo</em> aprende. Existen varios <strong>paradigmas</strong>, pero los dos que tienen que distinguir sí o sí son:</p>
+<table>
+<thead>
+<tr>
+<th>Paradigma</th>
+<th>Cómo aprende</th>
+<th>Ejemplo de nuestro caso</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Supervisado</strong></td>
+<td>Se le muestran ejemplos donde <strong>ya conocemos la respuesta correcta</strong> (datos etiquetados). Aprende corrigiéndose cada vez que se equivoca.</td>
+<td>Tenemos 7.043 clientes históricos y de cada uno <strong>sabemos</strong> si se fue (<code>Churn = Yes/No</code>). El modelo aprende de esas respuestas conocidas.</td>
+</tr>
+<tr>
+<td><strong>No supervisado</strong></td>
+<td>Recibe <strong>solo datos, sin respuestas</strong>, y debe descubrir patrones o grupos por su cuenta.</td>
+<td>Agrupar clientes parecidos <em>sin saber</em> de antemano a qué grupo pertenecen (clustering, ej. K-means).</td>
+</tr>
+</tbody>
+</table>
+<p>Nuestro proyecto es <strong>100% supervisado</strong>: la columna <code>Churn</code> es la "respuesta correcta" que le damos al algoritmo durante el entrenamiento. Esa es justamente la condición que lo define.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Es aprendizaje <strong>supervisado</strong> porque entrenamos con datos <strong>etiquetados</strong>: de los 7.043 clientes ya sabíamos quién había abandonado. El algoritmo aprende mirando esas respuestas conocidas y corrigiéndose; en uno <em>no supervisado</em> no le daríamos la respuesta y tendría que descubrir grupos solo."</p>
+</blockquote>
+<hr />
+<h3>2. Variable OBJETIVO vs. variables PREDICTORAS</h3>
+<p>Todo modelo supervisado tiene dos tipos de variables:</p>
+<ul>
+<li><strong>Variable objetivo (target / <code>y</code>):</strong> lo que <strong>queremos predecir</strong>. En nuestro caso es <strong><code>Churn</code></strong> (abandona: Sí / No). Es la salida del modelo.</li>
+<li><strong>Variables predictoras (features / <code>X</code>):</strong> la información que el modelo <strong>usa para predecir</strong>. Describen al cliente: antigüedad (<code>tenure</code>), tipo de contrato, método de pago, cargos mensuales, servicios contratados, etc.</li>
+</ul>
+<p>Piénsenlo como una ecuación: <strong><code>Churn = f(antigüedad, contrato, cargos, servicios…)</code></strong>. El entrenamiento es el proceso de encontrar esa función <code>f</code> que mejor relaciona las predictoras con el objetivo.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "La <strong>variable objetivo</strong> es <code>Churn</code>, lo que predecimos. Las <strong>predictoras</strong> son las características del cliente: antigüedad, tipo de contrato, cargos mensuales… El modelo aprende cómo esas características se relacionan con la decisión de irse."</p>
+</blockquote>
+<hr />
+<h3>3. ¿Por qué churn es CLASIFICACIÓN BINARIA?</h3>
+<p>Un modelo supervisado puede resolver distintos <strong>tipos de problema</strong>. Hay que saber ubicar el nuestro:</p>
+<ul>
+<li><strong>Clasificación binaria</strong> → predice entre <strong>dos categorías</strong>. <em>("¿El cliente se va? → Sí / No")</em> ← <strong>NUESTRO CASO</strong></li>
+<li><strong>Clasificación múltiple</strong> → elige entre 3+ categorías ("Alto / Medio / Bajo").</li>
+<li><strong>Regresión</strong> → predice un <strong>número continuo</strong> ("¿cuánto gastará el cliente el próximo mes?").</li>
+</ul>
+<p>Churn es <strong>binario</strong> porque la respuesta solo tiene <strong>dos valores posibles: abandona (1) o no abandona (0)</strong>. En el material esto se llama también <strong>"modelo de riesgo"</strong>: calcular la probabilidad de que ocurra un <em>evento no deseado</em> (Riesgo = Sí/No), exactamente como el "riesgo de abandono de clientes".</p>
+<p>Si en cambio quisiéramos predecir <em>el monto</em> que gastará un cliente, eso sería <strong>regresión</strong> (un número), no clasificación. Ese contraste es útil mencionarlo: demuestra que entienden <em>por qué</em> el nuestro es binario y no otra cosa.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Es <strong>clasificación binaria</strong> porque la variable objetivo solo tiene dos valores: se va o no se va. Es un <strong>modelo de riesgo</strong>: estimamos la probabilidad de un evento no deseado, el abandono. Si predijéramos <em>cuánto</em> gasta el cliente sería regresión, pero aquí solo nos interesa Sí/No."</p>
+</blockquote>
+<hr />
+<h3>4. División TRAIN / TEST y por qué ESTRATIFICAR</h3>
+<p>No se puede entrenar y evaluar con los mismos datos: sería como darle a un alumno el examen con las respuestas ya escritas. Por eso <strong>partimos el dataset en dos</strong>:</p>
+<ul>
+<li><strong>Entrenamiento (train, 70% ≈ 4.930 clientes):</strong> el modelo <strong>aprende</strong> con estos.</li>
+<li><strong>Prueba / holdout (test, 30% = 2.113 clientes):</strong> datos que el modelo <strong>nunca vio</strong>, para medir si de verdad <em>generaliza</em>.</li>
+</ul>
+<p>Usamos una división <strong>70/30 estratificada</strong> (queda registrado así en <code>resumen_modelo.json</code>). El 70/30 equilibra dos necesidades opuestas: suficientes datos para aprender, y suficientes para evaluar de forma confiable.</p>
+<p><strong>¿Qué es estratificar y por qué fue obligatorio aquí?</strong> Nuestro dataset está <strong>desbalanceado</strong>: solo el <strong>26,54% de los clientes abandona</strong> (la clase "Sí" es minoría; ~3 de cada 4 clientes se quedan). Si partiéramos <em>al azar puro</em>, por mala suerte el conjunto de prueba podría quedar con muy pocos casos de churn y la evaluación no sería representativa.</p>
+<p><strong>Estratificar</strong> significa partir manteniendo <strong>la misma proporción de clases en train y en test</strong>: ~26,5% de "se va" en <em>ambos</em> lados. Así garantizamos que tanto el aprendizaje como la evaluación reflejen la realidad del problema.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Dividimos <strong>70/30 estratificado</strong>: 70% para aprender, 30% (2.113 clientes) como <em>holdout</em> que el modelo nunca vio. <strong>Estratificamos</strong> porque solo el <strong>26,5% abandona</strong>; sin estratificar, el azar podría dejar el test con muy pocos casos de churn y la medición sería poco fiable. Estratificar mantiene ese 26,5% idéntico en ambos lados."</p>
+</blockquote>
+<hr />
+<h3>5. El flujo: DISEÑO → fit() → predict()</h3>
+<p>El entrenamiento sigue siempre la misma secuencia. Conviene tenerla clarísima porque es literalmente lo que hace nuestro microservicio <strong>trainer</strong>:</p>
+<ol>
+<li><strong>Diseño:</strong> decisiones <em>previas</em> — qué problema (clasificación binaria), qué algoritmo (regresión logística), qué hiperparámetros, qué métrica priorizar (recall). Todavía no se programa nada.</li>
+<li><strong>Construcción:</strong> se crea el objeto del modelo, p. ej. <code>LogisticRegression(class_weight='balanced')</code>. Queda <em>listo</em> pero <strong>aún no ha aprendido</strong>.</li>
+<li><strong>Entrenamiento — <code>fit(X_train, y_train)</code>:</strong> aquí el modelo <strong>aprende</strong>. Calcula internamente los <strong>coeficientes/pesos</strong> que mejor relacionan las predictoras con <code>Churn</code>, minimizando el error. <em>(En nuestra arquitectura, esto lo hace el endpoint <code>POST /train</code> del trainer, y guarda el modelo serializado en la tabla <code>modelo_artefacto</code> de Supabase.)</em></li>
+<li><strong>Evaluación — <code>predict(X_test)</code>:</strong> el modelo ya entrenado predice sobre el <strong>holdout</strong> y comparamos sus respuestas con la realidad para calcular las métricas. <em>(Esto lo hace el </em><em>predictor</em><em> en <code>GET /metrics</code> y <code>/predict</code>, cargando el modelo </em><em>sin re-entrenar</em><em>.)</em></li>
+</ol>
+<p>La idea central: <strong><code>fit()</code> = aprender, <code>predict()</code> = aplicar lo aprendido.</strong> Y son procesos separados, ejecutados por servicios distintos.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El flujo es diseño → <code>fit()</code> → <code>predict()</code>. En <code>fit()</code> el modelo <strong>aprende</strong> los coeficientes con el 70% de los datos; en <code>predict()</code> los <strong>aplica</strong> al 30% que nunca vio. En nuestra arquitectura está separado: el <strong>trainer</strong> hace <code>fit()</code> y guarda el modelo en <code>modelo_artefacto</code>; el <strong>predictor</strong> solo carga y hace <code>predict()</code>, sin re-entrenar."</p>
+</blockquote>
+<hr />
+<h3>6. HIPERPARÁMETROS</h3>
+<p>Cuidado con confundir dos cosas:</p>
+<ul>
+<li><strong>Parámetros</strong> (coeficientes, pesos): los <strong>aprende el modelo solo</strong> durante <code>fit()</code>.</li>
+<li><strong>Hiperparámetros:</strong> configuraciones que <strong>definimos nosotros ANTES de entrenar</strong>; el modelo <em>no</em> los aprende. Ejemplos del material: profundidad máxima de un árbol (<code>max_depth</code>), número de árboles en Random Forest (<code>n_estimators=100</code>), tipo de regularización en regresión logística (<code>penalty='L2'</code>).</li>
+</ul>
+<p>En nuestro proyecto el hiperparámetro clave fue <strong><code>class_weight='balanced'</code></strong> en la regresión logística. Le dice al modelo: <em>"pesa más los errores sobre la clase minoría (los que se van)"</em>, justamente para compensar ese desbalance del 26,5%. Sin él, el modelo tiende a ignorar a los que abandonan (que es lo que NO queremos).</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Los <strong>hiperparámetros</strong> los fijamos nosotros antes de entrenar, no los aprende el modelo. El nuestro clave fue <strong><code>class_weight='balanced'</code></strong>: hace que el modelo le dé más peso a la clase minoritaria —los que abandonan— para que no los ignore por el desbalance del 26,5%."</p>
+</blockquote>
+<hr />
+<h3>7. OVERFITTING vs. UNDERFITTING (con nuestro Random Forest como ejemplo de oro)</h3>
+<p>Estos dos conceptos son <strong>los más probables de que pregunte el profe</strong>, y tenemos un ejemplo perfecto en nuestros propios datos.</p>
+<ul>
+<li><strong>Underfitting (subajuste):</strong> el modelo aprende <strong>demasiado poco</strong>, no capta los patrones. Va mal <strong>tanto en train como en test</strong>. (Ej.: un modelo lineal trivial para un problema complejo.)</li>
+<li><strong>Overfitting (sobreajuste):</strong> el modelo <strong>memoriza</strong> los datos de entrenamiento en vez de <em>generalizar</em>. Va <strong>excelente en train pero falla con datos nuevos</strong>. La señal de alarma: <strong>una brecha grande entre el rendimiento en train y en test.</strong></li>
+</ul>
+<p><strong>Nuestro Random Forest balanceado es un caso de libro de overfitting.</strong> Miren los números reales de <code>metricas_modelos.csv</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Random Forest balanceado</th>
+<th>Recall en TRAIN</th>
+<th>Recall en TEST (holdout)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><strong>100%</strong> (<code>recall_train = 1.0</code>)</td>
+<td><strong>63,5%</strong> (<code>recall = 0.6346</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Detectó el <strong>100% de los abandonos en los datos que ya conocía</strong> (memorizó cada caso), pero al enfrentarse a clientes nuevos cayó al <strong>63,5%</strong>. Esa <strong>brecha de ~36 puntos</strong> entre lo que sabe "de memoria" y lo que logra "en la vida real" es la firma inconfundible del sobreajuste. Un modelo así <em>engaña</em>: parece perfecto en el laboratorio y decepciona en producción.</p>
+<p>Comparen con la <strong>Regresión Logística balanceada</strong>, que elegimos: recall <strong>80,4% en train</strong> vs. <strong>79,7% en test</strong> → prácticamente <strong>idénticos</strong>. Esa <strong>consistencia train/test</strong> es la prueba de que <strong>generaliza bien y NO sobreajusta</strong>. Por eso un modelo con números "más modestos pero honestos" le gana a uno con un 100% ilusorio.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El Random Forest <strong>sobreajusta</strong>: logra <strong>100% de recall en entrenamiento pero solo 63,5% en el holdout</strong> — memorizó en lugar de generalizar, y esa brecha enorme lo delata. Nuestra Logística balanceada da <strong>80,4% en train y 79,7% en test, casi iguales</strong>: eso prueba que generaliza. Preferimos un modelo honesto y estable a uno con un 100% que se desploma con datos nuevos."</p>
+</blockquote>
+<hr />
+<h3>8. MÉTRICAS A FONDO</h3>
+<p>Ahora lo medular del indicador 8: <em>saber leer las métricas y defender por qué priorizamos recall.</em></p>
+<h4>8.1 La matriz de confusión (TP / FP / TN / FN)</h4>
+<p>Es una tabla que cruza <strong>lo que predijo el modelo</strong> contra <strong>lo que pasó en realidad</strong>. En churn, definiendo "Positivo = el cliente abandona":</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Realidad: Se fue</strong></th>
+<th><strong>Realidad: Se quedó</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Predijo: Se va</strong></td>
+<td><strong>TP</strong> (acierto en churn)</td>
+<td><strong>FP</strong> (falsa alarma)</td>
+</tr>
+<tr>
+<td><strong>Predijo: Se queda</strong></td>
+<td><strong>FN</strong> (¡se nos escapó!)</td>
+<td><strong>TN</strong> (acierto en quedarse)</td>
+</tr>
+</tbody>
+</table>
+<p>Qué significa cada uno <strong>en nuestro caso</strong>:</p>
+<ul>
+<li><strong>TP — Verdadero Positivo:</strong> dije "se va" y <strong>efectivamente se fue</strong>. ✅ Lo detectamos a tiempo → podemos retenerlo.</li>
+<li><strong>FP — Falso Positivo (error tipo I):</strong> dije "se va" pero <strong>se quedaba igual</strong>. Falsa alarma → le gastamos un descuento de retención a alguien que no lo necesitaba. <em>Cuesta, pero es barato.</em></li>
+<li><strong>TN — Verdadero Negativo:</strong> dije "se queda" y <strong>se quedó</strong>. ✅</li>
+<li><strong>FN — Falso Negativo (error tipo II):</strong> dije "se queda" pero <strong>se fue</strong>. ❌ <strong>No hicimos nada y perdimos al cliente.</strong> <em>Este es el error caro.</em></li>
+</ul>
+<p>Estos son los números reales de nuestra <strong>Regresión Logística balanceada</strong> sobre el holdout de 2.113:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Se fue (real)</th>
+<th>Se quedó (real)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Predijo "se va"</strong></td>
+<td><strong>TP = 447</strong></td>
+<td><strong>FP = 431</strong></td>
+</tr>
+<tr>
+<td><strong>Predijo "se queda"</strong></td>
+<td><strong>FN = 114</strong></td>
+<td><strong>TN = 1.121</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "La matriz cruza predicción vs. realidad. El <strong>TP (447)</strong> son abandonos que <strong>detectamos</strong>; el <strong>FN (114)</strong> son los que <strong>se nos escaparon</strong>: dijimos que se quedaban y se fueron. Para el negocio, el <strong>FN es el error más caro</strong>, porque significa perder un cliente sin haber intentado retenerlo."</p>
+</blockquote>
+<h4>8.2 Accuracy (exactitud) — y por qué ENGAÑA con datos desbalanceados</h4>
+<p><strong>Accuracy = (aciertos totales) / (total) = (TP + TN) / todo.</strong> Es el % de respuestas correctas en general.</p>
+<p>Nuestra Logística balanceada tiene <strong>accuracy = 74,2%</strong>. Parece "menos buena" que la <strong>LogReg baseline (81,0%)</strong>… pero ahí está la trampa que <strong>tenemos que saber explicar</strong>:</p>
+<p>Como solo el 26,5% abandona, un modelo tramposo que dijera <strong>"NADIE se va" a todos</strong> acertaría automáticamente el <strong>~73,5%</strong> de las veces (porque el 73,5% efectivamente se queda) — <strong>sin detectar ni un solo abandono</strong>. Tendría una accuracy "decente"… y sería <strong>completamente inútil</strong> para el negocio.</p>
+<p>Por eso <strong>la accuracy ENGAÑA en problemas desbalanceados</strong>: premia adivinar la clase mayoritaria. Una accuracy alta puede esconder que el modelo es ciego al evento que <em>de verdad</em> nos importa.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "La <strong>accuracy engaña con desbalance</strong>. Como el 73,5% de los clientes se queda, un modelo que dijera 'nadie se va' acertaría el 73,5% <strong>sin detectar ni un abandono</strong>. Por eso no nos guiamos por la accuracy del 81% del modelo base: lo que importa es cuántos <em>abandonos reales</em> detectamos."</p>
+</blockquote>
+<h4>8.3 Precision</h4>
+<p><strong>Precision = TP / (TP + FP)</strong> — De todos los que <strong>predije</strong> que se iban, ¿cuántos <strong>realmente</strong> se iban? Mide cuánto puedo <em>confiar</em> en una alarma de churn.</p>
+<p>En la Logística balanceada: <strong>447 / (447 + 431) = 0,509 → 50,9%.</strong> Es decir, de cada 2 clientes que marcamos como "en riesgo", ~1 sí se iba. Baja, sí — porque generamos <strong>muchas falsas alarmas (FP = 431)</strong>. Pero eso fue una <strong>decisión consciente</strong>: preferimos sobre-marcar (campañas de retención de más) antes que dejar escapar clientes.</p>
+<h4>8.4 Recall (sensibilidad) — LA MÉTRICA PRIORITARIA</h4>
+<p><strong>Recall = TP / (TP + FN)</strong> — De todos los que <strong>realmente</strong> se iban, ¿cuántos <strong>detecté</strong>? Mide cuántos abandonos <em>no se me escaparon</em>.</p>
+<p>En la Logística balanceada: <strong>447 / (447 + 114) = 0,797 → 79,7%.</strong> <strong>Detectamos casi 8 de cada 10 abandonos reales.</strong></p>
+<p><strong>¿Por qué priorizamos recall y no precision ni accuracy?</strong> Por el <strong>costo asimétrico de los errores</strong>:</p>
+<ul>
+<li>Un <strong>FP</strong> (falsa alarma) cuesta un descuento de retención a alguien que se quedaba igual → <strong>barato, recuperable.</strong></li>
+<li>Un <strong>FN</strong> (cliente que se fue sin que lo detectáramos) → <strong>perdemos el cliente y todos sus ingresos futuros → caro, irreversible.</strong></li>
+</ul>
+<p>Cuando <strong>el FN es el error más caro, la métrica que hay que maximizar es el recall</strong>, porque el recall es precisamente la que <em>castiga los FN</em>. El propio material de la actividad lo dice explícito: "recall, porque interesa detectar el mayor número posible de abandonos". Sacrificamos algo de precision (más falsas alarmas) a cambio de <strong>no dejar escapar clientes</strong>, que es lo que de verdad le duele al negocio.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa (la respuesta clave del indicador 8):</strong> "Priorizamos <strong>recall = 79,7%</strong> porque en churn <strong>el Falso Negativo es el error más caro</strong>: un cliente que se va sin que lo detectemos es un ingreso perdido para siempre. Una falsa alarma, en cambio, solo cuesta un descuento. El recall mide justo cuántos abandonos <em>no</em> se nos escapan: detectamos casi 8 de cada 10. Por eso aceptamos bajar la precision al 51% — preferimos exceso de alarmas antes que perder clientes en silencio."</p>
+</blockquote>
+<h4>8.5 F1-score</h4>
+<p><strong>F1 es el equilibrio (media armónica) entre precision y recall.</strong> Resume en un solo número si el modelo es bueno <em>detectando</em> (recall) Y <em>sin equivocarse de más</em> (precision). Es útil precisamente cuando hay desbalance, porque no se deja engañar como la accuracy.</p>
+<p>Nuestra Logística balanceada tiene el <strong>F1 más alto de los cuatro modelos: 0,6213</strong> — por eso <code>resumen_modelo.json</code> la marca como <strong><code>mejor_modelo_por_f1</code></strong>. Ganó incluso a los modelos con mayor accuracy, lo que confirma que es el mejor <em>para este problema</em>.</p>
+<h4>8.6 Curva ROC-AUC y coeficiente de GINI</h4>
+<ul>
+<li><strong>ROC-AUC (Área Bajo la Curva ROC):</strong> mide la <strong>capacidad de discriminación</strong> del modelo — qué tan bien separa a los que se van de los que se quedan, <em>a lo largo de todos los umbrales posibles</em>. Va de 0,5 (azar puro, como tirar una moneda) a 1,0 (perfecto). Nuestra Logística balanceada: <strong>AUC = 0,846</strong>, una capacidad de separación <strong>buena</strong>.</li>
+<li><strong>Coeficiente de GINI:</strong> es el AUC reescalado para que sea más intuitivo. <strong>Gini = 2 × AUC − 1.</strong> Va de 0 (azar) a 1 (perfecto). Verifíquenlo con nuestro número: <strong>2 × 0,846 − 1 = 0,692</strong> → coincide con el <strong>Gini = 0,69</strong> del proyecto. Es muy usado en banca/telco para reportar poder predictivo.</li>
+</ul>
+<p>A diferencia de accuracy/precision/recall (que dependen del umbral de corte elegido), <strong>ROC-AUC y Gini evalúan el modelo de forma global</strong>, independiente del umbral. Por eso son una segunda opinión robusta: confirman que el modelo discrimina bien <em>en sí mismo</em>.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El <strong>AUC = 0,846</strong> mide qué tan bien el modelo <em>separa</em> a los que se van de los que se quedan, sin depender de un umbral; 0,5 sería azar y 1,0 perfecto. El <strong>Gini = 0,69</strong> es ese mismo poder reescalado con la fórmula <strong>Gini = 2·AUC − 1</strong> (2 × 0,846 − 1 = 0,69), muy usado en telco. Confirman que el modelo discrimina bien."</p>
+</blockquote>
+<hr />
+<h3>9. Tabla comparativa: los cuatro modelos (números reales del proyecto)</h3>
+<p>Esta es la diapositiva mental que conviene tener fija. Métricas sobre el <strong>holdout de 2.113 clientes</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Modelo</th>
+<th>Accuracy</th>
+<th>Precision</th>
+<th>Recall</th>
+<th>F1</th>
+<th>AUC</th>
+<th>Gini</th>
+<th>Recall TRAIN vs TEST</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LogReg (baseline)</td>
+<td>81,0%</td>
+<td>67,1%</td>
+<td>56,0%</td>
+<td>0,610</td>
+<td>0,847</td>
+<td>0,693</td>
+<td>54,9% / 56,0%</td>
+</tr>
+<tr>
+<td>Árbol (baseline)</td>
+<td>79,5%</td>
+<td>61,6%</td>
+<td>60,6%</td>
+<td>0,611</td>
+<td>0,832</td>
+<td>0,664</td>
+<td>61,2% / 60,6%</td>
+</tr>
+<tr>
+<td><strong>LogReg balanceada ✅</strong></td>
+<td><strong>74,2%</strong></td>
+<td><strong>50,9%</strong></td>
+<td><strong>79,7%</strong></td>
+<td><strong>0,621</strong></td>
+<td><strong>0,846</strong></td>
+<td><strong>0,693</strong></td>
+<td><strong>80,4% / 79,7%</strong></td>
+</tr>
+<tr>
+<td>RandomForest balanceado</td>
+<td>77,1%</td>
+<td>56,2%</td>
+<td>63,5%</td>
+<td>0,596</td>
+<td>0,823</td>
+<td>0,646</td>
+<td><strong>100% / 63,5% ⚠️ sobreajusta</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Cómo leer esta tabla en voz alta:</strong>
+- Los baselines tienen <strong>mejor accuracy</strong> (81% / 79,5%) pero <strong>recall pobre</strong> (56% / 60,6%) → se les escapan demasiados abandonos. La accuracy alta es el espejismo del desbalance.
+- El Random Forest <strong>sobreajusta</strong> (100% train → 63,5% test): descartado por no generalizar.
+- La <strong>LogReg balanceada</strong> sacrifica accuracy a propósito para subir el recall a <strong>79,7%</strong>, tiene el <strong>mejor F1 (0,621)</strong>, AUC/Gini a la par del mejor, y <strong>recall train≈test (80,4% ≈ 79,7%)</strong> que prueba que generaliza. <strong>Es la elección correcta para el objetivo de negocio: detectar abandonos.</strong></p>
+<blockquote>
+<p>💡 <strong>Para la defensa (cierre del indicador 8):</strong> "Elegimos <strong>Regresión Logística balanceada</strong> por tres razones, no por una sola: (1) <strong>el recall más alto, 79,7%</strong>, que es lo que importa porque el FN es el error caro; (2) <strong>el mejor F1, 0,621</strong>, el equilibrio óptimo entre detectar y no errar; y (3) <strong>no sobreajusta</strong> —recall casi idéntico en train y test, 80,4% vs 79,7%— al revés del Random Forest, que cae de 100% a 63,5%. Tiene menos accuracy que los baselines, sí, pero esa accuracy engaña con datos desbalanceados; lo que de verdad sirve al negocio es atrapar el máximo de abandonos, y eso lo logra este modelo."</p>
+</blockquote>
+<hr />
+<p><strong>Archivos fuente de esta sección (rutas absolutas):</strong>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\outputs\modelo\metricas_modelos.csv</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\outputs\modelo\resumen_modelo.json</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\3.1.1 Diseño, entrenamiento y evaluación inicial de un modelo de IA supervisado.pdf</code></p>
+<hr />
+<h2>Arquitectura del sistema: cómo se conecta todo</h2>
+<p>Esta es la sección que te da la <strong>foto completa</strong>. Si en la defensa te preguntan "¿cómo funciona su sistema de principio a fin?", lo que sigue es exactamente lo que tenés que poder contar: la vida de un dato desde que es una fila en un CSV hasta que aparece pintado en el dashboard como "cliente en riesgo".</p>
+<h3>1. La idea central: un dato que viaja por 4 estaciones</h3>
+<p>Imaginá una <strong>fábrica con una cinta transportadora</strong>. La materia prima (el CSV crudo con 7.043 clientes) entra por un extremo, pasa por varias estaciones que la van puliendo, y sale por el otro extremo convertida en algo útil (predicciones de quién se va a ir). Nadie en la fábrica hace todo: cada estación tiene <strong>una sola tarea</strong> y le pasa el resultado a la siguiente.</p>
+<p>En nuestro sistema hay <strong>cuatro grandes "estaciones"</strong>, y todas se hablan a través de un único punto de encuentro: <strong>la base de datos en Supabase</strong> (PostgreSQL 17). Esto es la clave que hay que entender: los componentes <strong>no comparten disco, no se llaman entre sí directamente, no se pasan archivos</strong>. Todos escriben y leen de tablas en Supabase. Supabase es el "tablón de anuncios" común.</p>
+<p>Las cuatro estaciones, y la tabla que cada una usa:</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Estación</th>
+<th>Qué hace</th>
+<th>Deja su resultado en…</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Pipeline DataOps</strong> (4 etapas)</td>
+<td>Limpia y valida el CSV crudo</td>
+<td>tabla <code>clientes</code> (7.043 filas limpias)</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>TRAINER</strong> (microservicio)</td>
+<td>Entrena el modelo de IA</td>
+<td>tabla <code>modelo_artefacto</code> (modelo + métricas)</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>PREDICTOR</strong> (microservicio)</td>
+<td>Puntúa a cada cliente con el modelo</td>
+<td>tabla <code>predicciones</code> (2.914 en riesgo)</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>DASHBOARD BI</strong> (Streamlit)</td>
+<td>Muestra métricas y clientes</td>
+<td>(no escribe; solo lee 2 y 3)</td>
+</tr>
+</tbody>
+</table>
+<p>Fijate en la cadena: la estación 1 deja <code>clientes</code>, que es <strong>lo que come</strong> la estación 2; la 2 deja <code>modelo_artefacto</code>, que es <strong>lo que come</strong> la 3; la 3 deja <code>predicciones</code>, que es <strong>lo que come</strong> la 4. Como una posta: cada uno entrega el testigo a través de Supabase.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Nuestro sistema es una posta de cuatro etapas donde <strong>el dato es el testigo y Supabase es la pista</strong>. El pipeline deja clientes limpios, el trainer deja el modelo, el predictor deja las predicciones, y el dashboard las muestra. Ningún componente se comunica con otro directamente: <strong>todos pasan por la base de datos</strong>."</p>
+</blockquote>
+<h3>2. La historia completa, paso a paso (el ciclo de vida del dato)</h3>
+<p><strong>Estación 1 — El pipeline DataOps deja datos limpios en <code>clientes</code>.</strong>
+El CSV fuente (<code>data/source/telco_churn_source.csv</code>) entra por la etapa de <strong>ingesta</strong>, pasa por <strong>limpieza</strong> (se arregla <code>TotalCharges</code>, se normalizan booleanos, se crean features como <code>tenure_group</code>), luego por <strong>validación</strong> (con <code>pandera</code>; lo que no cumple las reglas se aparta a <code>clientes_rechazados</code>), y finalmente la etapa de <strong>carga</strong> (<code>carga_bd.py</code>) inserta los 7.043 registros válidos en la tabla <code>clientes</code> de Supabase.</p>
+<p>Un detalle que conviene saber decir: esa carga es <strong>idempotente con full-refresh</strong>. En el código (<code>carga_bd.py</code>, función <code>cargar</code>) se ve que antes de insertar hace <code>TRUNCATE TABLE clientes</code> y luego el <code>INSERT</code>, <strong>todo dentro de la misma transacción</strong>. ¿Por qué? Para que correr el pipeline dos veces dé exactamente el mismo resultado (principio DataOps de <strong>reproducibilidad</strong>), y porque si el insert falla, el <code>ROLLBACK</code> deja la tabla intacta — no quedan datos a medias. La tabla de auditoría <code>carga_logs</code>, en cambio, <strong>nunca se borra</strong>: ahí queda el historial de cada corrida.</p>
+<p><strong>Estación 2 — El TRAINER entrena y guarda el modelo en <code>modelo_artefacto</code>.</strong>
+El microservicio trainer (<code>serve_modelo.py</code> con <code>ROL=trainer</code>) expone un único botón: <code>POST /train</code>. Cuando lo disparás, hace tres cosas (líneas 53–61 de <code>serve_modelo.py</code>):
+1. <code>modelo.cargar_datos("supabase")</code> → lee los 7.043 de <code>clientes</code>.
+2. <code>modelo.entrenar_modelo(df)</code> → entrena la Regresión Logística balanceada. Evalúa en un <strong>holdout 70/30 estratificado</strong> (2.113 clientes de prueba) para reportar métricas honestas — y de ahí salen el <strong>recall 79,7%</strong>, <strong>F1 0,62</strong>, <strong>Gini 0,69</strong>, <strong>accuracy 74,2%</strong> — y luego <strong>re-ajusta con todos los datos</strong> para que el modelo final sea el mejor posible.
+3. <code>modelo.guardar_modelo_supabase(pipe, met)</code> → <strong>serializa el modelo</strong> (con joblib, codificado en base64) y lo guarda como una fila en la tabla <code>modelo_artefacto</code>, junto con sus métricas.</p>
+<p>Lo importante: el modelo entrenado <strong>no queda en un archivo en el disco del trainer</strong>. Queda guardado <strong>en Supabase</strong>, como un dato más. Por eso otro servicio puede recogerlo.</p>
+<p><strong>Estación 3 — El PREDICTOR carga ese modelo y escribe en <code>predicciones</code>.</strong>
+El microservicio predictor (mismo <code>serve_modelo.py</code>, pero con <code>ROL=predictor</code>) <strong>nunca entrena</strong>. Cuando arranca, <code>cargar_modelo_supabase()</code> lee la fila de <code>modelo_artefacto</code>, <strong>deserializa</strong> el modelo y lo guarda en una caché en memoria (<code>_cache</code>) para no leerlo de la base en cada request. Luego ofrece tres servicios:
+- <code>GET /metrics</code> → devuelve las métricas holdout que venían guardadas con el modelo.
+- <code>GET /predict/cliente/{id}</code> → predice el riesgo de <strong>un</strong> cliente puntual.
+- <code>POST /predict/batch</code> → <strong>puntúa a los 7.043</strong> clientes de golpe y <strong>refresca la tabla <code>predicciones</code></strong> (de ahí salen los <strong>2.914 en riesgo</strong>).</p>
+<p><strong>Estación 4 — El DASHBOARD lee <code>modelo_artefacto</code> y <code>predicciones</code> y los muestra.</strong>
+El dashboard Streamlit <strong>no calcula nada ni entrena nada</strong>: es una <strong>vitrina</strong>. Se conecta a Supabase y lee dos tablas: de <code>modelo_artefacto</code> saca las <strong>métricas</strong> (matriz de confusión, recall, F1…) y de <code>predicciones</code> saca la <strong>lista de clientes</strong> y su nivel de riesgo. Por eso, gracias al <strong>auto-refresh</strong>, arranca vacío y se va llenando solo a medida que disparás <code>/train</code> (aparecen las métricas) y <code>/predict/batch</code> (aparecen los clientes) — ideal para construir el resultado en vivo durante la defensa.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El dato vive así: el pipeline lo deja <strong>limpio</strong> en <code>clientes</code>; el trainer aprende de esa tabla y guarda el <strong>modelo serializado</strong> en <code>modelo_artefacto</code>; el predictor toma ese modelo y escribe el <strong>scoring</strong> en <code>predicciones</code>; y el dashboard <strong>solo lee</strong> esas dos tablas para mostrar las métricas y los 2.914 clientes en riesgo. <strong>El dashboard no entrena ni predice: muestra.</strong>"</p>
+</blockquote>
+<h3>3. El diagrama (esto es lo que conviene dibujar en la pizarra)</h3>
+<pre><code>   CSV fuente (7.043 filas crudas, versionado en el repo)
+        │
+        ▼
+ ┌──────────────────────────────────────────────────┐
+ │  ESTACIÓN 1 — PIPELINE DataOps (4 etapas)         │
+ │  ingesta → limpieza → validación → carga          │
+ └──────────────────────────────────────────────────┘
+        │  escribe
+        ▼
+  ╔══════════════════════════════════════════════════════════╗
+  ║                 SUPABASE  (PostgreSQL 17)                 ║
+  ║         — el único punto de encuentro de todos —          ║
+  ║                                                            ║
+  ║   [ clientes ]   [ modelo_artefacto ]   [ predicciones ]  ║
+  ╚══════════════════════════════════════════════════════════╝
+      ▲   │                ▲   │                ▲      ▲
+ lee  │   │ lee            │   │ lee            │      │ lee
+      │   ▼                │   ▼ escribe        │      │
+ ┌─────────────────┐  ┌─────────────────┐  ┌────────────────────┐
+ │  ESTACIÓN 2     │  │  ESTACIÓN 3     │  │   ESTACIÓN 4       │
+ │  TRAINER        │  │  PREDICTOR      │  │   DASHBOARD BI     │
+ │  POST /train    │  │ /metrics        │  │   (Streamlit)      │
+ │  entrena +      │  │ /predict/cliente│  │   solo LEE y       │
+ │  guarda modelo  │  │ /predict/batch  │  │   muestra          │
+ └─────────────────┘  └─────────────────┘  └────────────────────┘
+   (escribe en          (lee modelo_artefacto,
+    modelo_artefacto)     escribe predicciones)
+</code></pre>
+<p>Leélo siguiendo las flechas: <strong>todo sube o baja a la caja del medio (Supabase)</strong>. Ningún cuadro de abajo toca a otro cuadro de abajo. Esa es la prueba visual de que el sistema está <strong>desacoplado</strong>.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Si tuviera que dibujarlo: tres servicios abajo, una base de datos en el centro, y <strong>todas las flechas apuntan a la base, nunca de servicio a servicio</strong>. Eso demuestra el desacople de un vistazo."</p>
+</blockquote>
+<h3>4. ¿Por qué está DESACOPLADO? (microservicios separados)</h3>
+<p>"Desacoplado" significa que <strong>cada pieza puede vivir, fallar, actualizarse y escalar por su cuenta</strong> sin arrastrar a las demás. Es lo opuesto a un <strong>monolito</strong> (un solo programa gigante que hace todo: si una parte cae, cae todo; si querés escalar una parte, tenés que duplicar el bloque entero).</p>
+<p>Por qué nos convino partirlo así:
+- <strong>Aislamiento de fallos:</strong> si el dashboard se cae, el modelo sigue prediciendo; si Railway se reinicia, los datos en Supabase no se pierden.
+- <strong>Escalar solo lo que satura:</strong> el predictor (que se usa mucho) se puede replicar sin tocar al trainer (que se usa poco). En un monolito tendrías que clonar todo.
+- <strong>Evolucionar por separado:</strong> podemos cambiar el modelo sin tocar el dashboard, y el dashboard sin tocar el pipeline, porque el contrato entre ellos <strong>es la tabla de Supabase</strong>, no el código.
+- <strong>Coherencia con Eval 2:</strong> ya habíamos hecho "un contenedor por capa" en el pipeline (cada etapa su propio contenedor). En Eval 3 <strong>extendimos ese mismo patrón a la capa de IA</strong>: trainer y predictor son dos contenedores separados.</p>
+<p>Un detalle elegante que vale la pena mencionar: trainer y predictor son <strong>el mismo archivo y la misma imagen Docker</strong> (<code>serve_modelo.py</code> / <code>Dockerfile.modelo</code>). Lo único que los diferencia es la <strong>variable de entorno <code>ROL</code></strong>: si <code>ROL=trainer</code> expone <code>/train</code>; si <code>ROL=predictor</code> expone los endpoints de predicción (se ve en la línea 25 y 52 de <code>serve_modelo.py</code>). Un solo código, dos roles — exactamente el mismo truco que en Eval 2.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Lo partimos en microservicios para <strong>aislar fallos y escalar solo lo que se satura</strong>. Trainer y predictor son <strong>la misma imagen</strong>; lo que cambia su rol es una variable de entorno <code>ROL</code>. Es el patrón 'un contenedor por capa' de Eval 2, ahora aplicado a la IA."</p>
+</blockquote>
+<h3>5. ¿Cómo se comunican? Todo vía Supabase, nunca disco compartido</h3>
+<p>Esta es la pregunta trampa más probable: <em>"¿Cómo le pasa el trainer el modelo al predictor?"</em>. La respuesta correcta <strong>no</strong> es "por un archivo compartido". Es:</p>
+<blockquote>
+<p>El trainer <strong>serializa</strong> el modelo (joblib → base64) y lo <strong>guarda como una fila</strong> en la tabla <code>modelo_artefacto</code>. El predictor, que es otro contenedor independiente, <strong>lee esa fila</strong> y <strong>deserializa</strong> el modelo. Nunca tocan el mismo disco.</p>
+</blockquote>
+<p>¿Por qué esto importa? Porque trainer y predictor pueden estar en <strong>máquinas distintas</strong> en Railway. No tienen una carpeta en común. Si dependieran de un archivo local, romperían en cuanto se desplegaran por separado. Al usar Supabase como intermediario, <strong>el modelo es un dato que viaja por la red</strong>, igual que cualquier otro registro. En el código se ve clarísimo: <code>serve_modelo.py</code> importa <code>modelo.guardar_modelo_supabase</code> y <code>modelo.cargar_modelo_supabase</code> — guardar y cargar, ambos contra Supabase. La conexión, además, va <strong>forzada con SSL</strong> (<code>sslmode=require</code>, ver <code>carga_bd.py</code> líneas 83–87).</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El trainer guarda el modelo <strong>serializado dentro de Supabase</strong>, no en un archivo. El predictor lo lee desde ahí. Se comunican <strong>a través de la base de datos</strong>, no de disco compartido — por eso pueden vivir en servidores distintos sin romperse."</p>
+</blockquote>
+<h3>6. TRAIN vs PREDICT: entrenar una vez, predecir muchas</h3>
+<p>Esta distinción es el corazón de por qué hay <strong>dos</strong> servicios y no uno:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>TRAIN (entrenar)</strong></th>
+<th><strong>PREDICT (predecir)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>¿Quién?</td>
+<td>trainer</td>
+<td>predictor</td>
+</tr>
+<tr>
+<td>¿Cada cuánto?</td>
+<td><strong>Una vez</strong> (offline, esporádico)</td>
+<td><strong>Muchas veces</strong> (online, constante)</td>
+</tr>
+<tr>
+<td>¿Es caro?</td>
+<td><strong>Sí</strong> — lee toda la base, ajusta el modelo</td>
+<td><strong>No</strong> — solo aplica un modelo ya hecho</td>
+</tr>
+<tr>
+<td>¿Qué deja?</td>
+<td>El modelo en <code>modelo_artefacto</code></td>
+<td>Las predicciones en <code>predicciones</code></td>
+</tr>
+<tr>
+<td>Analogía</td>
+<td><strong>Estudiar</strong> para el examen</td>
+<td><strong>Rendir</strong> el examen con lo estudiado</td>
+</tr>
+</tbody>
+</table>
+<p>La analogía del examen funciona perfecto: <strong>estudiás una vez</strong> (entrenar es lento y caro), pero después <strong>respondés muchas preguntas</strong> con lo que aprendiste (predecir es rápido y barato). Sería absurdo volver a estudiar toda la materia cada vez que te hacen una pregunta. Por eso el predictor <strong>carga el modelo y predice SIN re-entrenar</strong> — es justo el comentario que está en el código (<code>serve_modelo.py</code>, línea 360 del README y el docstring del módulo).</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Entrenar es como <strong>estudiar</strong>: lento, caro, se hace <strong>una vez offline</strong>. Predecir es como <strong>rendir el examen</strong>: rápido, se hace <strong>muchas veces</strong>. Por eso separamos: el trainer estudia una vez y guarda el modelo; el predictor lo usa muchas veces sin volver a estudiar."</p>
+</blockquote>
+<h3>7. ¿Qué corre LOCAL y qué corre en la NUBE?</h3>
+<p>Conviene tener clarísima esta frontera, porque demuestra que entendés <em>dónde</em> vive cada cosa:</p>
+<p><strong>En tu PC (LOCAL) — para desarrollar y probar:</strong>
+- <code>src/modelo.py</code> como <strong>script de línea de comandos</strong>: <code>python src/modelo.py --train</code> (entrena y guarda) o <code>--predict</code> (carga y predice). Es la versión "de banco de trabajo" del modelo, para iterar rápido antes de desplegar.
+- <code>src/benchmark.py</code> para medir rendimiento, y opcionalmente la API o el dashboard con <code>uvicorn</code> / <code>streamlit run</code> en <code>localhost</code>.</p>
+<p><strong>En la NUBE (Railway) — lo que está desplegado y vivo 24/7:</strong>
+- La <strong>API FastAPI</strong> del pipeline (<code>telco-api-production</code>).
+- El <strong>microservicio trainer</strong> (<code>telco-trainer-production</code>).
+- El <strong>microservicio predictor</strong> (<code>telco-predictor-production</code>).
+- El <strong>dashboard BI</strong> Streamlit (<code>telco-dashboard-production</code>).</p>
+<p>Y la <strong>base de datos (Supabase)</strong> está en la nube siempre — es el punto fijo al que todos, local o nube, se conectan.</p>
+<p>La gracia: el <strong>mismo <code>modelo.py</code></strong> sirve de las dos formas. Local lo invocás como script; en la nube, <code>serve_modelo.py</code> lo <strong>importa como librería</strong> (<code>import modelo</code>) y expone sus funciones como endpoints HTTP. Un solo código, dos formas de usarlo — local para desarrollar, nube para servir.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "<code>modelo.py</code> corre <strong>local como script</strong> para desarrollar (<code>--train</code> / <code>--predict</code>). En la <strong>nube</strong>, ese mismo código lo importa <code>serve_modelo.py</code> y lo expone como microservicios en Railway. <strong>La base (Supabase) está siempre en la nube</strong> y es el punto al que se conecta todo, corra donde corra."</p>
+</blockquote>
+<h3>Cierre: la frase de una sola línea</h3>
+<p>Si te queda poco tiempo y querés resumir toda la arquitectura en una frase:</p>
+<blockquote>
+<p><strong>"Cuatro componentes desacoplados —pipeline, trainer, predictor, dashboard— que se comunican únicamente a través de tablas en Supabase: el pipeline deja los datos limpios, el trainer guarda el modelo, el predictor escribe las predicciones y el dashboard las muestra; entrenar se hace una vez offline y predecir muchas veces, y todo lo serio corre en la nube (Railway + Supabase) mientras el código se desarrolla local."</strong></p>
+</blockquote>
+<p>Archivos de referencia (rutas absolutas):
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\README.md</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\serve_modelo.py</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\carga_bd.py</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\modelo.py</code></p>
+<hr />
+<h2>El código Python explicado</h2>
+<p>Esta sección recorre el código fuente archivo por archivo. La idea es que cualquiera de los dos pueda abrir el Swagger o el repo y explicar, en lenguaje simple, <strong>qué hace cada archivo, por qué se decidió así, y qué concepto de Python/sklearn hay detrás</strong>. Todos los archivos viven en <code>telco-churn-pipeline/src/</code>.</p>
+<p>Antes de entrar: el sistema tiene dos grandes mitades.
+1. <strong>El pipeline DataOps</strong> (4 etapas): <code>ingesta.py</code> → <code>limpieza.py</code> → <code>validacion.py</code> → <code>carga_bd.py</code>. Toma el CSV crudo y deja 7.043 clientes limpios en Supabase.
+2. <strong>El modelo de IA</strong>: <code>modelo.py</code> (el cerebro: entrena, evalúa, predice) y <code>serve_modelo.py</code> (la cáscara web que lo expone como microservicios).</p>
+<p>Una regla de oro que se repite en todos los archivos: <strong>cada etapa lee lo que dejó la anterior y escribe en su propia carpeta</strong> (<code>data/raw</code> → <code>data/clean</code> → <code>data/validated</code> → base de datos). Están <strong>desacopladas</strong>: cada una se puede correr sola, y todas usan un patrón idéntico de "buscar el último archivo con timestamp" (<code>sorted(...)[-1]</code>). Eso es lo que las hace un <em>pipeline</em> y no un solo script gigante.</p>
+<hr />
+<h3>1. <code>ingesta.py</code> — Etapa 1: traer el dato crudo</h3>
+<p><strong>Qué hace en una frase:</strong> es el único punto de entrada de datos al sistema. Busca el CSV fuente, lo copia a <code>data/raw/</code> con una marca de tiempo en el nombre, y registra de dónde vino.</p>
+<p><strong>La función clave es <code>ingestar()</code></strong>. Lo más interesante es su <strong>estrategia de fuentes en cascada</strong> (un <code>if/elif/else</code>), que prueba orígenes en orden de prioridad:
+1. Una ruta explícita que le pasen como parámetro.
+2. Si hay variables <code>SUPABASE_URL</code> + <code>SUPABASE_KEY</code> → descarga desde Supabase Storage.
+3. Si hay <code>SOURCE_CSV_PATH</code> → lee un archivo local en esa ruta.
+4. <strong>Fallback</strong>: el dataset versionado en el repo (<code>data/source/telco_churn_source.csv</code>), que viaja dentro de la imagen Docker.</p>
+<p>Esto es <strong>robustez</strong>: el pipeline funciona en local, en la nube o sin internet, sin cambiar el código, solo cambiando variables de entorno.</p>
+<p><strong>Detalles que el profe puede preguntar:</strong>
+- <strong>El timestamp en el nombre</strong> (<code>telco_churn_raw_20260628_153000.csv</code>): da <strong>trazabilidad</strong>. Nunca se pisa un archivo; cada ingesta queda registrada. La función <code>datetime.now().strftime("%Y%m%d_%H%M%S")</code> genera ese sello.
+- <strong><code>shutil.copy2</code></strong> copia el archivo <em>preservando metadatos</em> (fecha de modificación). Se usa <code>copy2</code> y no <code>copy</code> a propósito.
+- <strong><code>load_dotenv</code></strong> lee el archivo <code>.env</code> para cargar las variables de entorno (credenciales) sin escribirlas en el código.
+- Al final hace <code>pd.read_csv(...).shape</code> solo para <strong>contar filas y columnas</strong> y dejarlas en el log (7.043 filas, 21 columnas).
+- El bloque <code>if __name__ == "__main__":</code> con <code>sys.exit(0/1)</code> permite correr la etapa sola desde la terminal y que devuelva un <strong>código de salida</strong> (0 = éxito, 1 = error), que es lo que un orquestador necesita.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "La ingesta es el único punto de entrada de datos. Tiene una cascada de fuentes (ruta explícita → Supabase Storage → ruta local → dataset del repo) que da robustez sin tocar el código, y cada archivo se guarda con timestamp para trazabilidad: nunca pisamos un dato crudo."</p>
+</blockquote>
+<hr />
+<h3>2. <code>limpieza.py</code> — Etapa 2: transformar y normalizar</h3>
+<p><strong>Qué hace en una frase:</strong> convierte el CSV crudo en un dataset prolijo: arregla tipos, traduce textos a booleanos, crea una variable nueva y elimina duplicados. <strong>No valida</strong> (eso es trabajo de la etapa 3); solo transforma.</p>
+<p>La función central es <strong><code>limpiar()</code></strong>. Sus cuatro transformaciones, en orden:</p>
+<p><strong>a) El fix de <code>TotalCharges</code> (la pregunta clásica del caso).</strong> En el CSV original, <code>TotalCharges</code> viene como <strong>texto</strong>, y los clientes nuevos (tenure = 0, recién registrados, aún sin facturar) tienen ahí un <strong>string vacío</strong> <code>" "</code>. Eso rompería cualquier cálculo numérico. La solución, en dos pasos:</p>
+<pre><code class="language-python">df[&quot;TotalCharges&quot;] = pd.to_numeric(df[&quot;TotalCharges&quot;], errors=&quot;coerce&quot;)
+</code></pre>
+<p><code>pd.to_numeric</code> convierte la columna a número, y <code>errors="coerce"</code> significa "lo que no puedas convertir, conviértelo en <strong>NaN</strong>" (nulo) en vez de reventar. Luego viene una decisión de negocio:</p>
+<pre><code class="language-python">mask_imputable = df[&quot;TotalCharges&quot;].isna() &amp; (df[&quot;tenure&quot;] == 0)
+df.loc[mask_imputable, &quot;TotalCharges&quot;] = 0.0
+</code></pre>
+<p>Es decir: si el total está vacío <strong>y</strong> además el cliente lleva 0 meses, su total real <strong>es 0</strong> (todavía no ha pagado nada), así que se <strong>imputa 0</strong> con fundamento, no se inventa. Esto es <strong>imputación con criterio de negocio</strong>, no un relleno ciego.</p>
+<p><strong>b) Yes/No → booleano.</strong> Hay 5 columnas claramente binarias (<code>Partner</code>, <code>Dependents</code>, <code>PhoneService</code>, <code>PaperlessBilling</code>, <code>Churn</code>). Se traducen con un <code>.map()</code>:</p>
+<pre><code class="language-python">df[col] = df[col].map({&quot;Yes&quot;: True, &quot;No&quot;: False})
+</code></pre>
+<p><code>.map()</code> reemplaza cada valor según un diccionario. Solo se aplica a columnas donde "Yes/No" es inequívoco. Columnas como <code>OnlineSecurity</code> (que tienen un tercer valor, "No internet service") <strong>se dejan como texto</strong> a propósito, porque convertirlas a booleano perdería información.</p>
+<p><strong>c) <code>tenure_group</code> (feature derivada).</strong> Se crea una columna nueva agrupando la antigüedad en meses en tramos (<code>0-12</code>, <code>13-24</code>, <code>25-48</code>, <code>49-72</code>, <code>73+</code>) con la función <code>_categorizar_tenure</code>:</p>
+<pre><code class="language-python">df[&quot;tenure_group&quot;] = df[&quot;tenure&quot;].apply(_categorizar_tenure)
+</code></pre>
+<p><code>.apply()</code> ejecuta una función sobre cada fila de la columna. Esto es <strong>feature engineering</strong>: una variable nueva que facilita el análisis (por ejemplo, ver qué grupo de antigüedad se fuga más). Nota: esta columna sirve para análisis, pero el modelo la <strong>descarta</strong> (ver <code>modelo.py</code>) para no duplicar la información que ya está en <code>tenure</code>.</p>
+<p><strong>d) Deduplicación.</strong> <code>df.duplicated(subset=["customerID"])</code> detecta clientes repetidos por ID y se quedan con el primero (<code>keep="first"</code>).</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El caso clásico es <code>TotalCharges</code>: viene como texto con celdas vacías. Lo pasamos a número con <code>pd.to_numeric(errors='coerce')</code> y, donde queda NaN y el cliente tiene tenure 0, imputamos 0 porque es un cliente nuevo que aún no ha facturado: es imputación con criterio de negocio. Además creamos <code>tenure_group</code> como feature derivada para el análisis."</p>
+</blockquote>
+<hr />
+<h3>3. <code>validacion.py</code> — Etapa 3: el portero de calidad (pandera)</h3>
+<p><strong>Qué hace en una frase:</strong> revisa fila por fila que los datos cumplan las reglas; las filas buenas van a <code>data/validated/</code>, las malas van a <code>data/rejected/</code> <strong>con su motivo</strong> para auditoría. Nunca deja entrar dato sucio a la base.</p>
+<p>Hay <strong>dos niveles de validación</strong>, y es importante distinguirlos:</p>
+<p><strong>a) Validación estructural (con <code>pandera</code>).</strong> <code>pandera</code> es una librería que define un <strong>esquema</strong>: para cada columna, qué tipo debe tener, qué rango y qué valores permitidos. Por ejemplo, <code>tenure</code> debe ser un entero entre 0 y 72, <code>Contract</code> solo puede ser uno de tres valores, etc. (el esquema vive en <code>utils/schema.py</code>). La validación se hace así:</p>
+<pre><code class="language-python">schema_clientes.validate(df, lazy=True)
+</code></pre>
+<p>El <code>lazy=True</code> es clave: significa <strong>"no te detengas en el primer error, recolecta TODOS los errores de golpe"</strong>. Si algo falla, pandera lanza una excepción <code>SchemaErrors</code> con una tabla (<code>failure_cases</code>) que dice exactamente qué fila, qué columna y qué regla falló. El código atrapa esa excepción, separa las filas inválidas, y a cada una le pega un <code>motivo_rechazo</code> legible (ej. <code>tenure=99 (in_range)</code>).</p>
+<p><strong>b) Validación semántica (reglas de negocio cruzadas).</strong> Esto es lo que pandera por sí solo no hace: <strong>coherencia entre columnas</strong>. El ejemplo del caso: si un cliente tiene <code>InternetService = "No"</code>, entonces sus servicios derivados (<code>OnlineSecurity</code>, <code>StreamingTV</code>, etc.) <strong>tienen que decir</strong> <code>"No internet service"</code> — no pueden decir "Yes", sería una contradicción. Eso se chequea fila por fila con <code>validar_reglas_semanticas</code> (en <code>utils/schema.py</code>).</p>
+<p>Las filas que pasan <strong>ambos</strong> filtros se guardan; las rechazadas se concatenan (<code>pd.concat</code>) con su motivo y su <code>tipo_validacion</code> (estructural o semántica). Al final calcula la <strong>tasa de validez</strong> (% de filas que pasaron). En este dataset el 100% pasa, pero la infraestructura para rechazar y auditar está construida.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "La validación tiene dos capas. La estructural usa pandera con <code>lazy=True</code> para juntar todos los errores de tipo, rango y valores permitidos de una vez. La semántica chequea coherencia entre columnas: por ejemplo, si no hay internet, los servicios de internet tienen que decir 'No internet service'. Lo que falla no se borra: se guarda en <code>data/rejected</code> con su motivo, para auditoría de calidad."</p>
+</blockquote>
+<hr />
+<h3>4. <code>carga_bd.py</code> — Etapa 4: cargar a PostgreSQL (Supabase)</h3>
+<p><strong>Qué hace en una frase:</strong> toma el CSV validado y lo inserta en la tabla <code>clientes</code> de Supabase dentro de una transacción, dejando registro de auditoría de la carga.</p>
+<p>Conceptos clave:</p>
+<p><strong>a) <code>SQLAlchemy</code> + el engine cacheado.</strong> <code>SQLAlchemy</code> es la librería que conecta Python con la base de datos. La función <code>_build_engine()</code> arma el <strong>engine</strong> (la puerta de entrada a Postgres). Tiene dos detalles importantes:
+- <strong><code>@lru_cache(maxsize=1)</code></strong>: este decorador hace que el engine se construya <strong>una sola vez</strong> y se reutilice. ¿Por qué importa? Porque la API (FastAPI) recibe muchas requests, y crear un engine nuevo por cada una <strong>agotaría el límite de conexiones</strong> del plan gratuito de Supabase. El engine mantiene un <strong>pool de conexiones</strong> (<code>pool_size=3</code>) que se reciclan.
+- <strong>SSL forzado</strong>: arma la URL con <code>?sslmode=require</code>, de modo que la conexión a Supabase va <strong>cifrada</strong> sí o sí.</p>
+<p><strong>b) El mapeo de nombres.</strong> El CSV usa <code>customerID</code>, <code>MonthlyCharges</code> (estilo del dataset); la base usa <code>customer_id</code>, <code>monthly_charges</code> (snake_case, convención SQL). El diccionario <code>MAPEO_COLUMNAS</code> traduce de uno a otro con <code>df.rename(columns=...)</code>.</p>
+<p><strong>c) La decisión estrella: carga <code>full-refresh</code> idempotente (<code>TRUNCATE</code> + <code>INSERT</code>).</strong> Esto es lo que hay que saber explicar bien:</p>
+<pre><code class="language-python">with engine.begin() as conn:
+    conn.execute(text(&quot;TRUNCATE TABLE clientes RESTART IDENTITY CASCADE&quot;))
+    df.to_sql(&quot;clientes&quot;, conn, if_exists=&quot;append&quot;, ...)
+</code></pre>
+<ul>
+<li><strong><code>TRUNCATE</code></strong> vacía la tabla, y luego se <strong>reinsertan</strong> todas las filas. ¿Por qué no <code>INSERT</code> a secas? Porque así la carga es <strong>idempotente</strong>: corras el pipeline 1 vez o 5 veces, el resultado final es <strong>siempre el mismo</strong> (7.043 clientes, sin duplicados ni acumulación). Esa reproducibilidad es un principio central de <strong>DataOps</strong>.</li>
+<li><strong><code>with engine.begin()</code></strong> abre una <strong>transacción</strong>: el <code>TRUNCATE</code> y el <code>INSERT</code> viajan <strong>juntos</strong>. Si el insert falla a mitad de camino, se hace <strong>ROLLBACK</strong> automático y la tabla queda <strong>intacta</strong> (no queda vacía ni a medias). Es la propiedad de <strong>atomicidad</strong>: "todo o nada".</li>
+<li><code>method="multi", chunksize=500</code> inserta de a 500 filas por sentencia, para que sea rápido.</li>
+</ul>
+<p><strong>d) Auditoría.</strong> Dos cosas se auditan: las filas rechazadas de la etapa 3 van a la tabla <code>clientes_rechazados</code> (guardando el dato original como JSON), y cada ejecución de la carga deja un registro en <code>carga_logs</code> (cuántas filas leyó/insertó, duración, estado OK/ERROR). Importante: <strong>el histórico de <code>carga_logs</code> NUNCA se trunca</strong> — solo las tablas de estado.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "La carga es full-refresh idempotente: <code>TRUNCATE</code> + <code>INSERT</code> dentro de una sola transacción. Idempotente significa que correrlo N veces da siempre el mismo resultado, sin duplicados, que es un principio DataOps. Y al ir en una transacción, si el insert falla hace ROLLBACK y la tabla queda intacta. El engine se cachea con <code>lru_cache</code> para no agotar las conexiones de Supabase, y la conexión va con SSL obligatorio."</p>
+</blockquote>
+<hr />
+<h3>5. <code>modelo.py</code> — El cerebro: entrenar, evaluar y predecir</h3>
+<p>Este es el archivo más importante para el indicador 8 (métricas del modelo). Es el <strong>núcleo de IA</strong>. Tiene <strong>tres modos de ejecución</strong>, elegidos por argumento de línea de comandos (<code>argparse</code>):</p>
+<ul>
+<li><code>python src/modelo.py --eval</code> → entrena y <strong>compara 4 modelos</strong> + genera gráficos (alimenta el informe).</li>
+<li><code>python src/modelo.py --train</code> → entrena el <strong>modelo final</strong> y lo <strong>guarda</strong> en Supabase.</li>
+<li><code>python src/modelo.py --predict</code> → <strong>carga</strong> el modelo guardado y predice, <strong>sin re-entrenar</strong>.</li>
+</ul>
+<p>Esta separación <code>train</code> / <code>predict</code> es lo que permite el patrón de <strong>microservicios</strong> (un contenedor entrena, otro predice). Lo orquesta <code>argparse</code> con un <code>mutually_exclusive_group()</code>, que obliga a elegir <strong>un solo</strong> modo a la vez.</p>
+<p><strong>a) <code>_features(df)</code> — qué entra al modelo.</strong> Construye la matriz <strong>X</strong> (las variables predictoras) quitando lo que no debe entrar: <code>customerID</code> (es un identificador, no informa), <code>Churn</code> (es la respuesta, sería trampa) y <code>tenure_group</code> (redundante con <code>tenure</code>). Además convierte los booleanos a 0/1 con <code>.astype(int)</code>, porque sklearn trabaja con números.</p>
+<p><strong>b) <code>construir_preprocesador(X)</code> — el <code>ColumnTransformer</code> (concepto sklearn clave).</strong> Distintos tipos de columna necesitan tratamientos distintos. Un <code>ColumnTransformer</code> aplica una transformación diferente a cada grupo de columnas, todo en un solo objeto:</p>
+<pre><code class="language-python">ColumnTransformer([
+    (&quot;num&quot;, StandardScaler(), NUM_CONTINUAS),           # escala las continuas
+    (&quot;bin&quot;, &quot;passthrough&quot;, binarias),                   # deja las binarias tal cual
+    (&quot;cat&quot;, OneHotEncoder(handle_unknown=&quot;ignore&quot;...), categoricas),  # one-hot
+])
+</code></pre>
+<ul>
+<li><strong><code>StandardScaler</code></strong> sobre las 3 continuas (<code>tenure</code>, <code>MonthlyCharges</code>, <code>TotalCharges</code>): las <strong>estandariza</strong> (media 0, desviación 1). Esto importa <strong>porque la Regresión Logística es sensible a la escala</strong>: sin escalar, una variable con números grandes dominaría a una con números chicos.</li>
+<li><strong><code>"passthrough"</code></strong> sobre las binarias: ya son 0/1, no hay que tocarlas.</li>
+<li><strong><code>OneHotEncoder</code></strong> sobre las categóricas (ej. <code>Contract</code>, <code>PaymentMethod</code>): convierte una columna de texto con N categorías en N columnas de 0/1. Por ejemplo <code>Contract</code> se vuelve tres columnas (<code>Contract_Month-to-month</code>, <code>Contract_One year</code>, <code>Contract_Two year</code>). El modelo no entiende texto; necesita números. El <code>handle_unknown="ignore"</code> evita que reviente si en producción aparece una categoría nunca vista.</li>
+</ul>
+<p><strong>c) El <code>Pipeline</code> de sklearn (otro concepto clave).</strong> En <code>_modelo_produccion</code> se encadenan preprocesador + clasificador en <strong>un solo objeto</strong>:</p>
+<pre><code class="language-python">Pipeline([
+    (&quot;pre&quot;, construir_preprocesador(X)),
+    (&quot;clf&quot;, LogisticRegression(max_iter=1000, class_weight=&quot;balanced&quot;, random_state=42)),
+])
+</code></pre>
+<p>La gracia del <code>Pipeline</code> es que <strong>el preprocesamiento y el modelo viajan juntos</strong>. Cuando llamas <code>.fit()</code>, aprende a escalar/codificar <strong>y</strong> a clasificar; cuando llamas <code>.predict()</code>, aplica exactamente las mismas transformaciones. Esto <strong>evita el "data leakage"</strong> (que info del test se cuele en el entrenamiento) y hace que guardar el modelo guarde también su preprocesamiento: al cargarlo en producción, ya sabe transformar el dato crudo.</p>
+<p><strong>d) <code>class_weight="balanced"</code> (la decisión de modelado central).</strong> El dataset está <strong>desbalanceado</strong>: solo el 26,5% de los clientes hacen churn. Si no haces nada, el modelo aprende a decir "nadie se va" y acierta el 73% por pura pereza... pero es inútil, porque <strong>no detecta a los que se fugan</strong>. <code>class_weight="balanced"</code> le dice al modelo que <strong>pondere más los errores sobre la clase minoritaria</strong> (los que se van). El resultado: el <strong>recall</strong> sube a <strong>79,7%</strong> (detecta a 8 de cada 10 que se van), que es justo la métrica que más importa en retención.</p>
+<p><strong>e) <code>train_test_split</code> con <code>stratify</code> (concepto clave de evaluación).</strong></p>
+<pre><code class="language-python">X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.30, stratify=y, random_state=42)
+</code></pre>
+<ul>
+<li>Parte los datos en <strong>70% entrenamiento / 30% prueba</strong> (holdout de 2.113 clientes). Se entrena en una parte y se evalúa en otra que el modelo <strong>nunca vio</strong>, para tener métricas honestas.</li>
+<li><strong><code>stratify=y</code></strong> garantiza que la proporción de churn (26,5%) sea <strong>igual en train y en test</strong>. Sin esto, por azar el test podría quedar con muy pocos casos de churn y las métricas serían poco fiables.</li>
+<li><strong><code>random_state=42</code></strong> fija la semilla aleatoria → el reparto es <strong>reproducible</strong> (siempre el mismo, en cualquier máquina).</li>
+</ul>
+<p>Detalle fino que está bien saber: <code>entrenar_modelo</code> primero entrena en el 70% <strong>para medir</strong> en el holdout (métricas honestas que se reportan), y <strong>después re-ajusta el modelo final con el 100% de los datos</strong> etiquetados, para que el modelo que se despliega aproveche toda la información disponible.</p>
+<p><strong>f) Las métricas (<code>_metricas</code>).</strong> Calcula accuracy, precision, <strong>recall</strong>, <strong>F1</strong>, ROC-AUC y <strong>Gini</strong> (<code>2*AUC − 1</code>), más la <strong>matriz de confusión</strong> (TN, FP, FN, TP). Los números del proyecto: recall 79,7%, F1 0,62, Gini 0,69, accuracy 74,2%. En el modo <code>--eval</code>, <code>entrenar_y_evaluar</code> compara los 4 modelos y reporta <strong>recall en train vs test</strong>: ahí se ve que el RandomForest <strong>sobreajusta</strong> (100% en train, 63,5% en test), razón por la que se descartó a favor de la Regresión Logística.</p>
+<p><strong>g) Serialización: <code>joblib</code> + <code>base64</code> (concepto clave).</strong> ¿Cómo se "guarda" un modelo entrenado? Con <strong>serialización</strong>: convertir el objeto Python entrenado en bytes para almacenarlo.</p>
+<pre><code class="language-python">joblib.dump(pipe, buf)                          # modelo entrenado -&gt; bytes
+b64 = base64.b64encode(buf.getvalue()).decode(&quot;ascii&quot;)  # bytes -&gt; texto
+</code></pre>
+<ul>
+<li><strong><code>joblib</code></strong> es la librería estándar de sklearn para serializar modelos (más eficiente que <code>pickle</code> con arrays de NumPy).</li>
+<li>Como la columna de la base es de <strong>texto</strong>, los bytes se codifican a <strong>base64</strong> (una forma de representar binario como texto). Se guarda en la tabla <code>modelo_artefacto</code> junto con sus métricas (en JSONB). <code>cargar_modelo_supabase</code> hace el camino inverso: lee el texto, lo decodifica de base64, y <code>joblib.load</code> reconstruye el modelo <strong>idéntico</strong>, listo para predecir <strong>sin re-entrenar</strong>. <code>guardar_modelo_supabase</code> hace <code>TRUNCATE</code> antes de insertar, así siempre hay <strong>un solo modelo vigente</strong>.</li>
+</ul>
+<p><strong>h) <code>predecir_df</code>.</strong> Aplica el modelo cargado a un DataFrame de clientes y devuelve, por cliente: la clase predicha (<code>churn_pred</code>), la <strong>probabilidad</strong> de fuga (<code>churn_proba</code>, vía <code>predict_proba</code>) y, si hay etiqueta real, si acertó. Esto es lo que llena la tabla <code>predicciones</code> que lee el dashboard (2.914 clientes en riesgo).</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "<code>modelo.py</code> separa entrenar de predecir en tres modos. Usa un <code>Pipeline</code> de sklearn que une preprocesamiento y modelo: un <code>ColumnTransformer</code> que escala las continuas con <code>StandardScaler</code> —porque la regresión logística es sensible a la escala— y aplica <code>OneHotEncoder</code> a las categóricas para volverlas números. El desbalance del 26,5% lo tratamos con <code>class_weight='balanced'</code>, que sube el recall a 79,7%. Evaluamos con <code>train_test_split</code> 70/30 <code>stratify=y</code> para mantener la proporción de churn, y <code>random_state=42</code> para reproducibilidad. El modelo entrenado se serializa con <code>joblib</code>, se codifica en base64 y se guarda en Supabase, así el predictor lo carga sin re-entrenar."</p>
+</blockquote>
+<hr />
+<h3>6. <code>serve_modelo.py</code> — La cáscara web: FastAPI y un rol por variable</h3>
+<p><strong>Qué hace en una frase:</strong> envuelve a <code>modelo.py</code> en una <strong>API web con FastAPI</strong> y, según una variable de entorno <code>ROL</code>, el mismo archivo se comporta como <strong>trainer</strong> (entrena) o como <strong>predictor</strong> (predice). Una sola imagen Docker, dos servicios distintos.</p>
+<p><strong>a) El patrón "un rol por variable".</strong> Al arrancar lee:</p>
+<pre><code class="language-python">ROL = os.getenv(&quot;ROL&quot;, &quot;predictor&quot;).strip().lower()
+</code></pre>
+<p>Y según ese valor, <strong>registra unos endpoints u otros</strong>:
+- <code>ROL=trainer</code> → expone <code>POST /train</code>: carga los datos de Supabase, llama a <code>modelo.entrenar_modelo</code>, y guarda el modelo. Devuelve las métricas del holdout.
+- <code>ROL=predictor</code> (por defecto) → expone <code>GET /metrics</code>, <code>GET /predict/cliente/{id}</code> y <code>POST /predict/batch</code>: carga el modelo desde Supabase y predice <strong>sin entrenar</strong>.</p>
+<p>Es el mismo principio que en el pipeline ("misma imagen, distinto comportamiento por variable de entorno"). Los dos servicios <strong>no comparten disco ni código en ejecución</strong>: se comunican <strong>solo a través de Supabase</strong> (la tabla <code>modelo_artefacto</code>). El trainer escribe el modelo ahí; el predictor lo lee. Esto es <strong>arquitectura desacoplada de microservicios</strong>.</p>
+<p><strong>b) <code>FastAPI</code>.</strong> Es el framework que convierte funciones Python en endpoints HTTP. Cada función decorada con <code>@app.get(...)</code> o <code>@app.post(...)</code> se vuelve una URL que se puede llamar desde el navegador o el dashboard. FastAPI además genera la <strong>documentación Swagger</strong> automáticamente (la demo en vivo de la defensa).</p>
+<p><strong>c) El caché del modelo (eficiencia).</strong> El predictor no carga el modelo desde la base en cada request: lo guarda en memoria la primera vez (<code>_cache</code>) y lo reutiliza:</p>
+<pre><code class="language-python">def _modelo():
+    if &quot;pipe&quot; not in _cache:
+        _cache[&quot;pipe&quot;], _cache[&quot;met&quot;] = modelo.cargar_modelo_supabase()
+    return _cache[&quot;pipe&quot;], _cache[&quot;met&quot;]
+</code></pre>
+<p>Hay un endpoint <code>POST /reload</code> que vacía ese caché para forzar recargar el modelo (útil justo después de re-entrenar).</p>
+<p><strong>d) Manejo de errores con <code>HTTPException</code>.</strong> En vez de reventar con un error feo, traduce los problemas a códigos HTTP correctos: si el cliente no existe → <strong>404</strong>; si todavía no hay modelo entrenado → <strong>503</strong> ("servicio no disponible"). Esto hace la API profesional y predecible.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "<code>serve_modelo.py</code> expone el modelo con FastAPI. El truco es que la variable de entorno <code>ROL</code> decide si el contenedor es trainer (<code>POST /train</code>) o predictor (<code>/metrics</code>, <code>/predict/...</code>): una sola imagen, dos microservicios. No comparten nada en ejecución; se comunican solo por la tabla <code>modelo_artefacto</code> de Supabase. El predictor cachea el modelo en memoria para no leerlo de la base en cada request, y traduce los errores a códigos HTTP (404 si el cliente no existe, 503 si aún no hay modelo entrenado)."</p>
+</blockquote>
+<hr />
+<h3>Resumen mental (el mapa para no perderse)</h3>
+<table>
+<thead>
+<tr>
+<th>Archivo</th>
+<th>Etapa</th>
+<th>Concepto que el profe puede preguntar</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ingesta.py</code></td>
+<td>1. Ingesta</td>
+<td>Cascada de fuentes, timestamp para trazabilidad</td>
+</tr>
+<tr>
+<td><code>limpieza.py</code></td>
+<td>2. Limpieza</td>
+<td><code>pd.to_numeric(errors='coerce')</code>, imputación con criterio, <code>.map()</code>, feature derivada</td>
+</tr>
+<tr>
+<td><code>validacion.py</code></td>
+<td>3. Validación</td>
+<td><code>pandera</code> (<code>lazy=True</code>) estructural + reglas semánticas cruzadas</td>
+</tr>
+<tr>
+<td><code>carga_bd.py</code></td>
+<td>4. Carga</td>
+<td>SQLAlchemy, <code>lru_cache</code>, SSL, <code>TRUNCATE</code>+<code>INSERT</code> transaccional idempotente</td>
+</tr>
+<tr>
+<td><code>modelo.py</code></td>
+<td>Modelo IA</td>
+<td><code>Pipeline</code>, <code>ColumnTransformer</code>, <code>OneHotEncoder</code>, <code>StandardScaler</code>, <code>class_weight</code>, <code>train_test_split</code> con <code>stratify</code>, <code>joblib</code>+base64</td>
+</tr>
+<tr>
+<td><code>serve_modelo.py</code></td>
+<td>Serving</td>
+<td>FastAPI, rol por variable <code>ROL</code>, microservicios desacoplados</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p>Archivos de referencia (rutas absolutas), por si quieren abrirlos durante la defensa:
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\ingesta.py</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\limpieza.py</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\validacion.py</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\carga_bd.py</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\modelo.py</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\serve_modelo.py</code></p>
+<hr />
+<h2>Análisis de rendimiento en la nube</h2>
+<p>Construir un pipeline que <em>funcione</em> no es suficiente. En producción también importa <strong>cuánto cuesta</strong> que funcione: cuánto demora, cuántos recursos consume y si se mantiene estable. Esta sección mide eso sobre nuestro sistema real y, sobre todo, identifica <strong>dónde está el cuello de botella</strong> —que es justo lo que la rúbrica pide encontrar.</p>
+<h3>¿Por qué se mide el rendimiento?</h3>
+<p>Cuando un pipeline pasa de "corre en mi notebook" a "corre en la nube para un cliente real", aparecen preguntas que antes no importaban. Medimos cuatro cosas:</p>
+<ul>
+<li><strong>Tiempo de ejecución:</strong> cuánto tarda cada etapa, de principio a fin. Si una predicción tarda 5 minutos, el negocio no la usa.</li>
+<li><strong>Consumo de CPU:</strong> qué porcentaje del procesador ocupa. Una CPU clavada en 90% sostenido es señal de un proceso mal optimizado o de un servidor a punto de saturarse.</li>
+<li><strong>Consumo de RAM:</strong> cuánta memoria usa, sobre todo durante el entrenamiento (la etapa más pesada). Si la RAM se dispara, el contenedor puede caerse (un <em>Out Of Memory</em>).</li>
+<li><strong>Estabilidad:</strong> si el pipeline completa todas sus etapas sin errores ni cierres inesperados, y lo hace de forma repetible (no que funcione una vez y falle la siguiente).</li>
+</ul>
+<p>La idea de fondo: <strong>el mismo código puede comportarse distinto en local que en la nube</strong>, y hay que tenerlo medido antes de prometerle un nivel de servicio a alguien.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Medimos rendimiento porque que el pipeline funcione no garantiza que sea usable en producción. Vigilamos cuatro dimensiones: tiempo, CPU, RAM y estabilidad. Lo crítico es que el comportamiento en la nube no es igual al local, y eso hay que tenerlo medido, no supuesto."</p>
+</blockquote>
+<h3>¿Cómo lo medimos? (psutil + time.time())</h3>
+<p>No usamos herramientas exóticas: las mismas dos que recomienda la guía del ramo, en un script propio (<code>src/benchmark.py</code>).</p>
+<ul>
+<li><strong><code>time.time()</code></strong> mide el tiempo. Es un cronómetro: guardamos la hora antes de una operación (<code>t0</code>), la ejecutamos, y restamos la hora de después. La diferencia es cuánto tardó. En el código esto vive en la función <code>_cron(fn)</code>, que ejecuta una función y devuelve <code>(resultado, segundos)</code>.</li>
+<li><strong><code>psutil</code></strong> (Python System Utilities) mira los recursos del proceso. <code>proc.memory_info().rss</code> nos da la RAM real ocupada en memoria física (RSS = <em>Resident Set Size</em>), y <code>psutil.cpu_percent()</code> el porcentaje de CPU.</li>
+</ul>
+<p>Lo importante del diseño del experimento: <strong>leemos el MISMO dataset (7.043 clientes) de dos maneras</strong> y comparamos.
+1. <strong>Lectura local:</strong> desde el CSV validado en disco (<code>pd.read_csv</code>).
+2. <strong>Lectura en la nube:</strong> desde Supabase (<code>SELECT * FROM clientes</code> por una conexión PostgreSQL).</p>
+<p>Al ser exactamente los mismos datos, cualquier diferencia de tiempo <strong>no se debe a los datos</strong>, sino al <em>dónde están</em> y a <em>cómo se accede a ellos</em>. Es una comparación limpia: cambiamos una sola variable (local vs. nube) y dejamos todo lo demás igual. Después medimos también el <strong>entrenamiento</strong> del modelo para ver cuánto pesa el cómputo real.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Usamos <code>time.time()</code> como cronómetro y <code>psutil</code> para CPU y RAM. La clave del experimento es que leemos los mismos 7.043 clientes de dos formas —del CSV local y de Supabase— para que la única diferencia sea el origen del dato. Así aislamos el efecto de la nube."</p>
+</blockquote>
+<h3>El concepto de CUELLO DE BOTELLA</h3>
+<p>Un <strong>cuello de botella</strong> es la etapa que más ralentiza el proceso completo —la analogía es literal: en una botella, el líquido sale tan rápido como deje pasar el cuello angosto, da igual lo ancho que sea el resto. En un pipeline, <strong>optimizar cualquier otra etapa no sirve de nada si no atacas la lenta</strong>: el total lo manda el paso más caro.</p>
+<p>Por eso medimos etapa por etapa en vez de cronometrar solo el total. El total te dice <em>qué tan rápido</em> es; el desglose te dice <em>dónde</em> gastar el esfuerzo de mejora. Encontrar el cuello de botella es exactamente el paso que la rúbrica nos pide.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El cuello de botella es la etapa que limita la velocidad de todo el pipeline, como el cuello angosto de una botella. Optimizar cualquier otra etapa es perder el tiempo si no atacas esa. Por eso medimos etapa por etapa, no solo el total."</p>
+</blockquote>
+<h3>Nuestro resultado</h3>
+<p>Estos son los números reales de nuestra corrida (<code>outputs/rendimiento/benchmark.json</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Operación</th>
+<th>Tiempo</th>
+<th>Filas</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lectura <strong>local</strong> (CSV)</td>
+<td><strong>0,018 s</strong></td>
+<td>7.043</td>
+</tr>
+<tr>
+<td>Lectura <strong>nube</strong> (Supabase)</td>
+<td><strong>3,939 s</strong></td>
+<td>7.043</td>
+</tr>
+<tr>
+<td>Entrenamiento del modelo</td>
+<td><strong>1,336 s</strong></td>
+<td>7.043</td>
+</tr>
+<tr>
+<td><strong>TOTAL</strong></td>
+<td><strong>5,293 s</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Recursos: <strong>RAM ≈ 200 MB</strong> (con un incremento de ~82 MB durante la ejecución) y <strong>CPU ≈ 9,9%</strong>.</p>
+<p>El hallazgo central salta a la vista:</p>
+<p><strong>Leer de la nube tardó 3,94 s; leer el mismo dato local tardó 0,018 s. La nube fue ≈ 219× más lenta.</strong></p>
+<p>Y atención al contraste clave: <strong>entrenar el modelo —el cómputo de verdad, el que "piensa"— tardó solo 1,34 s, casi tres veces menos que leer los datos de la nube.</strong></p>
+<h3>¿Qué significa esto? La latencia de red, no el cómputo</h3>
+<p>Esto es lo importante de entender y de decir bien:</p>
+<p><strong>Nuestro cuello de botella NO es el cómputo. Es la latencia de red.</strong></p>
+<p>¿Por qué? La operación matemáticamente más cara —entrenar la regresión logística sobre 7.043 clientes— se resuelve en 1,34 s. En cambio, la operación trivial —traer una tabla que ya existe— se demora 3,94 s. Esos casi 4 segundos <strong>no se gastan calculando nada</strong>: se gastan en el viaje de ida y vuelta de los datos por internet hasta el servidor de Supabase y de regreso. Es <strong>latencia de red</strong>, no esfuerzo de procesador. De hecho la CPU estuvo casi ociosa (~10%): el sistema no estaba trabajando, estaba <strong>esperando</strong> a que llegaran los datos por la red.</p>
+<p>Contrastando contra los umbrales sanos que da la propia guía del ramo (para ~10.000 registros: tiempo total 5–15 s, CPU 30–50%, RAM 300–800 MB), nuestro sistema está <strong>cómodamente dentro o por debajo</strong>:</p>
+<ul>
+<li><strong>Tiempo total 5,3 s</strong> → en el rango aceptable, cerca del piso (rápido). ✅</li>
+<li><strong>CPU ~10%</strong> → muy por debajo del 80% de riesgo; sin sobrecarga. ✅</li>
+<li><strong>RAM ~200 MB</strong> → incluso por debajo del rango, porque 7.043 filas es un dataset chico. ✅</li>
+<li><strong>Estabilidad</strong> → el pipeline completa las cuatro etapas sin errores. ✅</li>
+</ul>
+<p>Y encaja con lo que la guía anticipa: "con <strong>regresión logística</strong>, estos tiempos y consumos son razonables". Elegir un modelo liviano nos da, gratis, un buen perfil de rendimiento.</p>
+<h3>La mejora propuesta: acercar el cómputo a los datos / cachear</h3>
+<p>Como sabemos <em>exactamente</em> dónde está el problema (la red, no el procesador), la mejora es precisa y barata —no hay que comprar más CPU ni RAM, eso no resolvería nada:</p>
+<ol>
+<li><strong>Cachear la lectura:</strong> guardar el resultado de la consulta para no volver a pedir por red lo mismo. Si los 7.043 clientes ya se trajeron una vez, las siguientes corridas leen de una copia local en milisegundos. Pagas la latencia <strong>una vez</strong>, no cada vez.</li>
+<li><strong>Acercar el cómputo a los datos:</strong> ejecutar el predictor/entrenador en la <strong>misma región</strong> del servidor de Supabase (ambos en infraestructura cercana). Mientras más corto el cable entre la app y la base, menor la latencia. Hoy el dato viaja más de lo necesario.</li>
+<li><strong>Traer solo lo que se usa:</strong> en vez de <code>SELECT *</code>, pedir únicamente las columnas necesarias, y para scoring usar lotes (<code>/predict/batch</code>) en lugar de mil llamadas individuales —cada llamada paga su propio peaje de red.</li>
+</ol>
+<p>La lección de ingeniería: <strong>medir primero, optimizar después</strong>. Sin el benchmark, alguien habría intentado "optimizar el algoritmo" (que ya es rapidísimo, 1,34 s) y no habría tocado el verdadero problema. El número nos dijo dónde mirar.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Nuestro resultado clave: leer de la nube tardó 3,94 s contra 0,018 s en local, unas 219 veces más. Pero el entrenamiento —el cómputo real— tardó solo 1,34 s. O sea, el cuello de botella NO es el procesador, es la <strong>latencia de red</strong>: la CPU estuvo al 10%, esperando datos, no calculando. El total fueron 5,3 s, dentro de los umbrales sanos. La mejora correcta es <strong>cachear</strong> la lectura y <strong>acercar el cómputo a los datos</strong> (misma región), no comprar más hardware. Y la moraleja: medimos antes de optimizar, porque sin el dato habríamos optimizado la etapa equivocada."</p>
+</blockquote>
+<hr />
+<p>Archivos de respaldo (rutas absolutas):
+- Datos del benchmark: <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\outputs\rendimiento\benchmark.json</code>
+- Script de medición: <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\src\benchmark.py</code>
+- Guía oficial de la actividad: <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\3.2.1 Análisis comparativo de rendimiento del sistema.pdf</code></p>
+<p>(Nota para quien arma la guía: el archivo 3.2.1 entregado es un <strong>PDF</strong>, no un .txt; lo leí igual. El JSON real reporta <code>cpu_pct</code> 9,9% y <code>overhead_nube_vs_local_x</code> 218,8, consistente con los ~10% y ~219× usados arriba.)</p>
+<hr />
+<h2>Auditoría de seguridad y Ley 21.719</h2>
+<blockquote>
+<p><strong>Por qué este tema vale el 30% (indicador 9).</strong> En la defensa oral no basta con decir "le pusimos seguridad". Tienes que demostrar que entiendes <em>qué</em> protegiste, <em>cómo</em> lo verificaste y <em>por qué la ley chilena te obliga a ello</em>. Esta sección te enseña los <strong>4 frentes de la auditoría</strong> (credenciales, accesos, entorno y logs) y luego conecta cada control técnico con un <strong>principio legal</strong> de la Ley 21.719. Si dominas el mapeo "control técnico ↔ principio legal", tienes el indicador 9 ganado.</p>
+</blockquote>
+<h3>¿Qué es una "auditoría de seguridad" y por qué la hicimos?</h3>
+<p>Una <strong>auditoría de seguridad</strong> es una revisión sistemática que busca responder una pregunta: <em>¿quién puede tocar nuestros datos, por dónde, y qué pasaría si alguien malintencionado lo intentara?</em> No es "instalar un antivirus": es revisar el sistema completo (el repositorio en GitHub, la API en Railway y la base en Supabase) buscando puntos débiles, y dejar <strong>evidencia reproducible</strong> de cada revisión.</p>
+<p>Organizamos la auditoría en los <strong>4 frentes</strong> que enseña el material del curso (unidad 3.3). La idea de fondo es la <strong>defensa en profundidad</strong>: no confiar en una sola barrera, sino poner varias capas, de modo que si una falla, otra contiene el ataque.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Nuestra auditoría no fue improvisada: seguimos los 4 frentes del material —credenciales, accesos, entorno y logs— y dejamos evidencia reproducible de cada uno en <code>outputs/seguridad/auditoria_seguridad.md</code>. La filosofía es defensa en profundidad: varias capas, no una sola."</p>
+</blockquote>
+<hr />
+<h3>Frente 1 — Credenciales y secretos</h3>
+<p><strong>Concepto.</strong> Un <strong>secreto</strong> es cualquier dato que da acceso al sistema: contraseñas, <em>tokens</em> de API, la cadena de conexión a la base (<code>DATABASE_URL</code>). La regla de oro es: <strong>los secretos nunca viven en el código</strong> ni en el historial de Git, porque nuestro repositorio es <strong>público</strong> en GitHub (cualquiera en el mundo puede leerlo). Si una contraseña aparece en el código y se sube, ya está comprometida aunque la borres después, porque <strong>queda en el historial de Git</strong> para siempre.</p>
+<p><strong>Cómo lo resolvimos (el patrón "secretos solo en el entorno"):</strong>
+- Las credenciales viven únicamente como <strong>variables de entorno</strong> en Railway y Supabase, y en un archivo <code>.env</code> <strong>local</strong>.
+- El código nunca escribe la clave: la <strong>lee</strong> con <code>os.getenv("DATABASE_URL")</code>. Es decir, el programa pide el secreto al entorno en tiempo de ejecución, no lo lleva escrito.
+- El archivo <code>.env</code> está <strong>gitignored</strong>: aparece en <code>.gitignore</code> (línea 16), así que Git lo ignora y nunca se sube.</p>
+<p><strong>Cómo lo verificamos (la evidencia que puedes citar):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Verificación</th>
+<th>Cómo</th>
+<th>Resultado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>¿Hay secretos escritos en el código?</td>
+<td><code>grep -i "password\|token\|secret\|sbp_\|service_role"</code> sobre el repo</td>
+<td>Solo <strong>placeholders</strong> (<code>tu_password</code>, <code>[YOUR-PASSWORD]</code>, <code>'CAMBIAR'</code>) y lecturas <code>os.getenv(...)</code>. <strong>0 secretos reales.</strong></td>
+</tr>
+<tr>
+<td>¿<code>.env</code> está ignorado?</td>
+<td>revisar <code>.gitignore</code></td>
+<td>Sí, excluido.</td>
+</tr>
+<tr>
+<td>¿<code>.env</code> se subió alguna vez?</td>
+<td><code>git log --all -- .env</code></td>
+<td><strong>Nunca</strong> commiteado.</td>
+</tr>
+<tr>
+<td>¿Hubo alguna contraseña en algún commit antiguo?</td>
+<td><code>git log --all -S '&lt;password&gt;'</code></td>
+<td><strong>0 commits.</strong></td>
+</tr>
+</tbody>
+</table>
+<p>El <code>grep</code> sobre el repo público es la prueba clave: rastreamos todas las palabras que delatarían un secreto y solo encontramos <em>placeholders</em> (textos de relleno como <code>CAMBIAR_EN_PRODUCCION</code>) y llamadas a <code>os.getenv</code>. Cero claves reales.</p>
+<p>Además, la conexión a Supabase fuerza <strong><code>sslmode=require</code></strong>: el dato viaja <strong>cifrado en tránsito</strong> (TLS), así nadie que intercepte la red ve la contraseña ni los datos.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Ningún secreto vive en el código. Las credenciales están solo en variables de entorno; el código las lee con <code>os.getenv</code>. El <code>.env</code> está gitignored y un <code>grep</code> sobre el repo público demuestra 0 secretos reales, solo placeholders. Como bonus, la conexión va por TLS con <code>sslmode=require</code>." Si te preguntan <em>"¿y si borras la clave del código después?"</em>, responde: <strong>"No sirve: queda en el historial de Git. Por eso el secreto nunca debe entrar, no basta con sacarlo."</strong></p>
+</blockquote>
+<hr />
+<h3>Frente 2 — Accesos y permisos (privilegio mínimo)</h3>
+<p>Este es el frente más técnico y el que más impresiona. Dos conceptos clave:</p>
+<p><strong>(a) Privilegio mínimo (<em>least privilege</em>).</strong> Cada actor del sistema recibe <strong>solo los permisos que estrictamente necesita</strong>, ni uno más. El dashboard solo necesita <em>leer</em> datos → entonces solo le damos SELECT, jamás INSERT/UPDATE/DELETE. Así, si alguien roba la credencial del dashboard, <strong>no puede borrar ni alterar nada</strong>, solo leer.</p>
+<p><strong>(b) Row-Level Security (RLS) "cerrado por defecto".</strong> Supabase expone automáticamente todas las tablas del esquema <code>public</code> por una <strong>API REST</strong> (PostgREST). Sin protección, cualquiera con la <em>anon key</em> (que es pública por diseño) podría leer las tablas desde Internet. RLS es un mecanismo de PostgreSQL que dice: <em>"esta tabla no responde a menos que exista una política que lo permita"</em>. Nosotros <strong>activamos RLS en todas las tablas y NO creamos políticas permisivas</strong> → resultado: <strong>cerrado por defecto</strong>. La tabla existe, pero no entrega ni una fila a los roles públicos.</p>
+<p><strong>Los tres roles de Supabase que debes saber explicar:</strong>
+- <strong><code>anon</code></strong> (anónimo): el rol con el que entra cualquiera que llame a la API REST pública sin loguearse. En nuestro proyecto: <code>rolcanlogin = false</code>, <code>rolbypassrls = false</code> → <strong>no puede saltarse RLS</strong>, y como hay 0 políticas, <strong>no lee absolutamente nada</strong>.
+- <strong><code>authenticated</code></strong>: el rol de un usuario que sí inició sesión (vía Supabase Auth). Mismo caso: no bypassa RLS y sin políticas no accede.
+- <strong><code>postgres</code></strong> (el rol <strong>dueño</strong>, con el que se conecta nuestro backend): tiene <code>rolbypassrls = true</code>, es decir, <strong>ignora RLS</strong> porque es el propietario de las tablas. Por eso la ingesta y la carga del pipeline funcionan. Importante: <strong>es el dueño, NO un superusuario</strong> — distinción que conviene aclarar si te lo preguntan.
+- (Existe también <code>service_role</code>, de uso interno del backend, que también bypassa RLS pero no es de login público.)</p>
+<p><strong>Estado verificado</strong> (consultando <code>pg_tables</code> y <code>pg_policies</code> en Supabase):</p>
+<table>
+<thead>
+<tr>
+<th>Tabla</th>
+<th>RLS activo</th>
+<th>Nº de políticas</th>
+<th>Efecto</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>clientes</code></td>
+<td>Sí</td>
+<td>0</td>
+<td>cerrado por defecto</td>
+</tr>
+<tr>
+<td><code>predicciones</code></td>
+<td>Sí</td>
+<td>0</td>
+<td>cerrado por defecto</td>
+</tr>
+<tr>
+<td><code>carga_logs</code></td>
+<td>Sí</td>
+<td>0</td>
+<td>cerrado por defecto</td>
+</tr>
+<tr>
+<td><code>clientes_rechazados</code></td>
+<td>Sí</td>
+<td>0</td>
+<td>cerrado por defecto</td>
+</tr>
+</tbody>
+</table>
+<p>El propio <strong>advisor de seguridad de Supabase reporta 0 vulnerabilidades</strong>: las 4 notas que aparecen son <code>INFO: RLS enabled, no policy</code>, que es <strong>exactamente la postura que buscábamos</strong> (RLS activo, sin puertas abiertas). Una nota informativa, no una alerta.</p>
+<p><strong>El rol de solo lectura (<code>sql/02_roles_seguridad.sql</code>).</strong> Para llevar el privilegio mínimo a producción, definimos un rol <code>telco_lectura</code> que:
+- recibe <strong><code>GRANT SELECT</code></strong> solo en <code>clientes</code> y <code>predicciones</code> (las tablas que el dashboard necesita; <strong>no</strong> en la auditoría interna <code>carga_logs</code>),
+- y al que se le <strong><code>REVOKE INSERT, UPDATE, DELETE, TRUNCATE</code></strong> de forma explícita (defensa en profundidad: negamos la escritura por partida doble).</p>
+<p>En producción, el dashboard se conectaría como <code>telco_lectura</code>, <strong>nunca como el dueño</strong>. Así separamos dos mundos: <em>escritura</em> (el pipeline, rol dueño) y <em>lectura analítica</em> (el dashboard, rol restringido).</p>
+<blockquote>
+<p>💡 <strong>Para la defensa (este es el punto fuerte del frente):</strong> "La base <strong>no es accesible públicamente</strong>. Activamos Row-Level Security en las 4 tablas sin políticas permisivas: cerrado por defecto. Los roles públicos <code>anon</code> y <code>authenticated</code> no pueden bypassear RLS y, con 0 políticas, no leen nada. Solo el rol dueño <code>postgres</code>, con el que se conecta el backend, bypassea RLS. Y para producción tenemos <code>telco_lectura</code>, un rol de <strong>solo SELECT</strong> para el dashboard: aplica privilegio mínimo. El propio advisor de Supabase reporta 0 vulnerabilidades."</p>
+<p>💡 <strong>Pregunta trampa frecuente — "¿Por qué RLS con CERO políticas? ¿No es un error?"</strong> Respuesta: <strong>"Al contrario, es intencional. RLS activo + 0 políticas = la tabla niega todo a los roles públicos. El backend funciona porque entra como dueño, que ignora RLS. Si quisiéramos abrir lectura controlada, agregaríamos una política <code>FOR SELECT</code> para un rol específico — que es justo lo que hace <code>telco_lectura</code>."</strong></p>
+</blockquote>
+<hr />
+<h3>Frente 3 — Entorno de ejecución y dependencias</h3>
+<p><strong>Concepto.</strong> Tu código puede ser perfecto, pero si usa <strong>librerías de terceros con vulnerabilidades conocidas</strong>, heredas esas vulnerabilidades. Una <strong>CVE</strong> (<em>Common Vulnerabilities and Exposures</em>) es un identificador público de una vulnerabilidad reportada (ej. <code>CVE-2024-47874</code>). Auditar el entorno significa: revisar qué versiones de librerías usamos y si alguna tiene CVEs.</p>
+<p><strong>La herramienta: <code>pip-audit</code>.</strong> Escanea <code>requirements.txt</code> contra una base de datos de vulnerabilidades conocidas. En nuestro proyecto encontró <strong>10 vulnerabilidades en 3 paquetes</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Paquete</th>
+<th>Versión</th>
+<th>CVE</th>
+<th>Se corrige en</th>
+<th>Criticidad real para nosotros</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>starlette</code></td>
+<td>0.36.3</td>
+<td>CVE-2024-47874 y 6 más</td>
+<td>0.40.0 → 1.x</td>
+<td>Es <strong>transitiva</strong> de FastAPI 0.110 (no la usamos directo). Subirla obliga a subir FastAPI → acoplada.</td>
+</tr>
+<tr>
+<td><code>python-dotenv</code></td>
+<td>1.0.0</td>
+<td>CVE-2026-28684</td>
+<td>1.2.2</td>
+<td>Lee el <code>.env</code>. Actualización <strong>directa y segura</strong>.</td>
+</tr>
+<tr>
+<td><code>pytest</code></td>
+<td>7.4.4</td>
+<td>CVE-2025-71176</td>
+<td>9.0.3</td>
+<td>Solo dependencia de <strong>desarrollo/test</strong>, no corre en producción.</td>
+</tr>
+</tbody>
+</table>
+<p>Lo importante para la defensa no es memorizar las CVEs, sino mostrar <strong>criterio de priorización</strong>: no todas las vulnerabilidades pesan igual. <code>python-dotenv</code> se arregla solo (correctivo inmediato), <code>pytest</code> ni siquiera corre en producción (riesgo bajo), y <code>starlette</code> es <strong>transitiva</strong> (no la instalamos nosotros: viene "arrastrada" por FastAPI), por lo que actualizarla exige planificar una subida conjunta de FastAPI — eso es un cambio <strong>preventivo planificado</strong>, no urgente.</p>
+<p><strong><code>trivy</code> para imágenes/contenedores.</strong> Mientras <code>pip-audit</code> revisa librerías de Python, <strong><code>trivy</code></strong> escanea <strong>imágenes Docker</strong> (el sistema operativo base del contenedor y sus paquetes). Como nuestro despliegue es <em>cloud-only</em> (Railway construye la imagen; no tenemos Docker instalado localmente), aplicamos el equivalente gestionado —<code>pip-audit</code> + escaneo del repo— y <strong>proponemos <code>trivy</code></strong> para escanear la imagen que Railway construye. Saber nombrar <code>trivy</code> y para qué sirve (imágenes, no solo librerías de Python) es un punto que suma.</p>
+<p><strong>Exposición de red.</strong> Revisamos qué puertos quedan abiertos a Internet:
+- <strong>Supabase</strong> exige TLS/SSL y autenticación: no acepta conexiones anónimas a la base. El puerto de la BD <strong>no está abierto</strong> a Internet.
+- <strong>Railway</strong> expone <strong>solo el puerto HTTPS</strong> del servicio FastAPI. Nada de puertos de base de datos colgando en la red.</p>
+<p>Es decir: <strong>superficie de ataque mínima</strong> y todo el tráfico <strong>cifrado (SSL/TLS)</strong>.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Auditamos las dependencias con <code>pip-audit</code>: 10 CVEs en 3 paquetes. El único accionable inmediato es <code>python-dotenv</code> (se sube a 1.2.2). <code>starlette</code> es transitiva de FastAPI —hay que planificar la subida conjunta— y <code>pytest</code> solo corre en test, no en producción. Para las <strong>imágenes</strong> Docker la herramienta es <code>trivy</code>, que proponemos sobre la imagen que construye Railway. En red, solo está expuesto el puerto HTTPS de FastAPI; la base no acepta conexiones anónimas y exige TLS." Frase de oro: <strong>"Es el único hallazgo realmente accionable de toda la auditoría, y tenemos plan de mitigación clasificado."</strong></p>
+</blockquote>
+<hr />
+<h3>Frente 4 — Logs de seguridad</h3>
+<p><strong>Concepto clave: log de <em>rendimiento</em> ≠ log de <em>seguridad</em>.</strong> Esta distinción es la que el material quiere que captes. No es lo mismo monitorear <em>que el sistema vaya rápido</em> que monitorear <em>que nadie esté atacándolo</em>.</p>
+<ul>
+<li><strong>Log de auditoría del pipeline (<code>carga_logs</code>):</strong> nuestra tabla <code>carga_logs</code> registra cada corrida del pipeline —archivo origen, registros leídos/insertados/rechazados, duración y estado (<code>OK</code>/<code>ERROR</code>/<code>PARCIAL</code>)—. Esto da <strong>trazabilidad e integridad del dato</strong>: sabemos exactamente qué entró, cuándo y con qué resultado. Es auditoría operacional.</li>
+<li><strong>Lectura de seguridad de los logs (Railway/Supabase):</strong> aquí cambia el lente. Un <strong>acceso fallido repetido NO es un error benigno</strong>: muchos intentos fallidos de autenticación seguidos = <strong>posible ataque de fuerza bruta</strong> (alguien probando contraseñas a ciegas). La tarea de seguridad es <strong>clasificar eventos</strong>:</li>
+<li><strong>Críticos</strong> → accesos denegados, errores de autenticación repetidos (posible intrusión).</li>
+<li><strong>Advertencias</strong> → latencia alta, reintentos puntuales (problema de rendimiento, no ataque).</li>
+</ul>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Distinguimos dos tipos de logs. <code>carga_logs</code> es auditoría del pipeline: trazabilidad de qué dato entró. Pero la <strong>lectura de seguridad</strong> es distinta: en los logs de Railway/Supabase, <strong>accesos fallidos repetidos = posible fuerza bruta</strong>, no un error cualquiera. Por eso clasificamos eventos críticos (autenticación denegada) frente a advertencias (latencia). La mitigación es revisar periódicamente los accesos y alertar ante picos de fallos."</p>
+</blockquote>
+<hr />
+<h3>Síntesis de la auditoría: hallazgo → mitigación</h3>
+<p>Cada hallazgo se clasifica como <strong>preventivo</strong> (mantener una buena práctica antes de que ocurra el problema) o <strong>correctivo</strong> (arreglar algo ya detectado):</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Hallazgo</th>
+<th>Severidad</th>
+<th>Mitigación</th>
+<th>Tipo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Sin secretos en código/historial</td>
+<td>OK</td>
+<td>Mantener patrón; <strong>revocar tokens tras la evaluación</strong></td>
+<td>Preventiva</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Base cerrada por defecto (RLS)</td>
+<td>OK</td>
+<td>Aplicar rol de solo lectura al dashboard</td>
+<td>Preventiva</td>
+</tr>
+<tr>
+<td>3</td>
+<td>10 CVEs en dependencias</td>
+<td>Media</td>
+<td>Actualizar <code>python-dotenv</code>; planear FastAPI+Starlette</td>
+<td>Correctiva + Preventiva</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Logs no monitoreados por seguridad</td>
+<td>Baja</td>
+<td>Revisar accesos fallidos periódicamente</td>
+<td>Preventiva</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Free tier se suspende (disponibilidad)</td>
+<td>Baja</td>
+<td>Despertar servicios antes de demostrar</td>
+<td>Preventiva</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El balance es sólido: la base está cerrada y sin secretos expuestos. El único hallazgo de severidad media son las dependencias, con plan de mitigación. Todo lo demás es preventivo: endurecimiento, no remediación de fallas graves."</p>
+</blockquote>
+<hr />
+<h3>La Ley: 19.628 modernizada por la Ley 21.719</h3>
+<p><strong>Qué ley aplica.</strong> En Chile la protección de datos personales se rige por la <strong>Ley 19.628</strong>. Esa ley, antigua y débil, fue <strong>reformada y modernizada integralmente por la Ley 21.719</strong>, que <strong>eleva los estándares al nivel europeo del GDPR</strong> (el reglamento europeo, considerado el estándar de oro). Dato clave para citar: la Ley 21.719 entra en <strong>aplicación plena el 01-12-2026</strong>. Como nuestra evaluación es de 2026, es legislación <strong>inminente y vigente</strong>, no hipotética.</p>
+<p><strong>Datos personales vs. datos sensibles en el dataset Telco.</strong> Esta clasificación es pregunta segura:</p>
+<ul>
+<li><strong>Datos personales</strong> = información que identifica o se relaciona con una persona. En nuestro dataset:</li>
+<li><code>customerID</code> → identificador del titular.</li>
+<li><code>gender</code>, <code>SeniorCitizen</code> → atributos de la persona (género, rango etario).</li>
+<li><code>Partner</code>, <code>Dependents</code> → situación familiar.</li>
+<li><code>tenure</code>, <code>Contract</code>, <code>MonthlyCharges</code>, <code>TotalCharges</code>, <code>PaymentMethod</code> → <strong>datos económicos y de la relación contractual</strong>.</li>
+<li><strong>Datos sensibles</strong> = categorías especiales que la 21.719 protege con más fuerza (salud, biometría, ideología, origen étnico, vida sexual, etc.). <strong>Nuestro dataset NO contiene datos sensibles</strong> en sentido estricto. Pero sí tiene <strong>datos personales económicos y conductuales</strong> que exigen protección.</li>
+</ul>
+<p>Saber decir <em>"no manejamos datos sensibles, pero sí personales de tipo económico-conductual, y por eso igual aplicamos protección"</em> demuestra que entiendes la diferencia y no exageras ni minimizas.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Aplica la Ley 19.628 <strong>modernizada por la Ley 21.719</strong>, que sube Chile al nivel del GDPR europeo y entra en vigencia plena el <strong>01-12-2026</strong>. En nuestro dataset hay <strong>datos personales</strong> —<code>customerID</code>, género, situación familiar y datos económicos como cargos y método de pago— pero <strong>no datos sensibles</strong> en sentido estricto (salud, biometría). Aun así, los datos económicos exigen protección, y por eso construimos con <em>compliance by design</em>."</p>
+</blockquote>
+<hr />
+<h3><em>Compliance by design</em>: mapeo control técnico ↔ principio legal</h3>
+<p>Este es el <strong>corazón del indicador 9</strong> y lo que distingue una buena defensa de una mediocre. <strong>No defiendas la seguridad por un lado y la ley por otro</strong>: muestra que <strong>cada control técnico cumple un principio legal concreto</strong>. Eso es lo que significa <em>compliance / privacy by design</em>: la privacidad no se "añade al final", está <strong>embebida desde el diseño</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Principio (Ley 21.719 / GDPR)</th>
+<th>Qué exige</th>
+<th>Control técnico que lo cumple</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Finalidad y proporcionalidad</strong></td>
+<td>Usar los datos solo para el fin declarado</td>
+<td>Los datos se usan <strong>solo para predecir churn</strong>; no se recolectan campos extra.</td>
+</tr>
+<tr>
+<td><strong>Minimización</strong></td>
+<td>Recolectar los datos mínimos necesarios</td>
+<td>Usamos <code>customer_id</code> (un identificador, <strong>no</strong> nombre ni RUT); el modelo usa solo las variables necesarias.</td>
+</tr>
+<tr>
+<td><strong>Seguridad y confidencialidad</strong></td>
+<td>Proteger los datos contra accesos no autorizados</td>
+<td><strong>RLS cerrado por defecto + privilegio mínimo + TLS en tránsito + secretos fuera del código.</strong></td>
+</tr>
+<tr>
+<td><strong>Calidad / integridad del dato</strong></td>
+<td>Mantener datos exactos y actualizados</td>
+<td>Pipeline de limpieza+validación (Eval 2) + auditoría en <code>carga_logs</code>.</td>
+</tr>
+<tr>
+<td><strong>Responsabilidad proactiva</strong> (<em>accountability</em>, <strong>nuevo en la 21.719</strong>)</td>
+<td>Poder <strong>demostrar</strong> cumplimiento, no solo cumplir</td>
+<td>Controles embebidos desde el diseño; <strong>esta misma auditoría es la evidencia documentada</strong>.</td>
+</tr>
+<tr>
+<td><strong>Derechos ARCO</strong></td>
+<td>El titular puede ejercer sus derechos</td>
+<td>El pipeline indexa por <code>customer_id</code> y opera <strong>full-refresh</strong> → permite rectificar o eliminar a un titular.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Los derechos ARCO</strong> (memorízalos): <strong>A</strong>cceso (saber qué datos tienen de mí), <strong>R</strong>ectificación (corregir datos erróneos), <strong>C</strong>ancelación (eliminar mis datos), <strong>O</strong>posición (negarme a un tratamiento). Como nuestra base está <strong>indexada por <code>customer_id</code></strong> y el pipeline trabaja en <em>full-refresh</em> (reemplaza el dataset completo en cada corrida), podemos <strong>localizar, rectificar o eliminar</strong> los datos de cualquier titular concreto: ahí cumplimos ARCO técnicamente.</p>
+<p><strong>Reflexión CIA</strong> (la tríada de seguridad de la información, por si la mencionan):
+- <strong>C</strong>onfidencialidad → RLS + privilegio mínimo + TLS (solo quien debe, ve el dato).
+- <strong>I</strong>ntegridad → validación + transacciones + auditoría <code>carga_logs</code> (el dato no se corrompe).
+- <strong>D</strong>isponibilidad → servicios gestionados Supabase/Railway. <strong>Riesgo conocido:</strong> el <em>free tier</em> se suspende por inactividad → <strong>mitigación:</strong> despertar los servicios antes de operar o demostrar.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa (la frase que cierra el indicador 9):</strong> "No hicimos seguridad y ley por separado: cada control cumple un principio. <strong>RLS y privilegio mínimo = principio de seguridad y confidencialidad. Usar <code>customer_id</code> en vez de nombre o RUT = minimización. Usar los datos solo para churn = finalidad. Indexar por <code>customer_id</code> con full-refresh = derechos ARCO.</strong> Y lo nuevo de la 21.719, la <strong>responsabilidad proactiva</strong>: tenemos que <em>demostrar</em> el cumplimiento, y esta auditoría documentada es justamente esa prueba. Eso es <em>compliance by design</em>."</p>
+<p>💡 <strong>Si te preguntan "¿qué cambia con la 21.719 respecto a la 19.628?":</strong> "Sube Chile al nivel del GDPR: introduce la <strong>responsabilidad proactiva</strong> (<em>accountability</em> — hay que demostrar el cumplimiento, no solo declararlo), refuerza los <strong>derechos ARCO</strong>, define con claridad los <strong>datos sensibles</strong> y crea una autoridad de control. Por eso construimos con privacidad desde el diseño y dejamos evidencia."</p>
+</blockquote>
+<hr />
+<p><strong>Referencias del proyecto (rutas absolutas) usadas en esta sección:</strong>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\outputs\seguridad\auditoria_seguridad.md</code> — informe completo de la auditoría (4 frentes + mapeo legal + tabla hallazgo→mitigación).
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\sql\01_create_tables.sql</code> — DDL con activación de <strong>RLS</strong> en las tablas (<code>ENABLE ROW LEVEL SECURITY</code>).
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\sql\02_roles_seguridad.sql</code> — rol de <strong>solo lectura <code>telco_lectura</code></strong> (GRANT SELECT / REVOKE escritura), implementación del privilegio mínimo.</p>
+<p>Nota: el archivo <code>3.3.1_Evaluacin_de_seguridad_del_pipeline_y_su_entorno_de_ejecucin.txt</code> no existe en el proyecto; su contenido (los 4 frentes del material 3.3) ya está incorporado y citado dentro de <code>auditoria_seguridad.md</code>, que fue la fuente usada.</p>
+<hr />
+<h2>Integración BI, el dashboard, y limitaciones/mejoras</h2>
+<h3>¿Qué es Business Intelligence (BI) y por qué importa?</h3>
+<p><strong>Business Intelligence (Inteligencia de Negocios)</strong> es el conjunto de prácticas y herramientas que convierten <em>datos crudos</em> en <em>información comprensible</em> para tomar decisiones. La idea de fondo es muy simple: <strong>un modelo de IA que nadie entiende no sirve de nada.</strong> Por muy bueno que sea nuestro modelo de churn, si el resultado se queda como un número escondido en una base de datos, el gerente de retención no puede actuar sobre él.</p>
+<p>La guía del ramo lo dice textualmente: <em>"No basta con entrenar un modelo de IA y obtener resultados: es necesario que esos resultados puedan ser interpretados y utilizados por quienes toman decisiones."</em> La visualización de datos sirve para tres cosas concretas:</p>
+<ul>
+<li><strong>Mostrar</strong> los resultados del modelo de forma comprensible (un gráfico se entiende en segundos; una tabla de 2.000 filas, no).</li>
+<li><strong>Identificar patrones</strong> (por ejemplo: "los clientes con contrato mes a mes se van mucho más").</li>
+<li><strong>Facilitar la toma de decisiones basada en datos</strong> (a quién llamo primero para retenerlo).</li>
+</ul>
+<p>En nuestro caso, la herramienta de BI es un <strong>dashboard hecho en Streamlit</strong>. Streamlit es una librería de Python que convierte un script en una página web interactiva; aparece explícitamente en la lista de herramientas que recomienda el ramo (junto a Power BI, Tableau y Grafana). Lo elegimos porque está en Python —el mismo lenguaje del pipeline y del modelo—, así no tuvimos que aprender otra herramienta ni exportar datos a mano.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "BI es traducir datos en decisiones. Nuestro modelo predice quién se va a ir, pero ese número solo, en una tabla, no le sirve a nadie. El dashboard lo convierte en algo que un encargado de retención puede leer de un vistazo y accionar: a quién llamar primero."</p>
+</blockquote>
+<h3>Cómo NUESTRO dashboard integra los resultados (el flujo conectado)</h3>
+<p>La guía describe el <strong>flujo más utilizado</strong> para conectar todo, y es exactamente el que implementamos:</p>
+<ol>
+<li><strong>El pipeline procesa los datos</strong> → deja 7.043 clientes limpios en Supabase.</li>
+<li><strong>El modelo genera resultados</strong> → el predictor puntúa a cada cliente y <strong>escribe</strong> las predicciones en la tabla <code>predicciones</code> de Supabase.</li>
+<li><strong>El dashboard se conecta a esa fuente</strong> → lee de <code>predicciones</code> y muestra todo actualizado.</li>
+</ol>
+<p>La parte clave —y lo que la rúbrica llama <em>"conexión real con el pipeline"</em>— es que <strong>el dashboard NO recalcula nada ni guarda CSV a mano: lee directo de la base de datos.</strong> En el código (<code>dashboard/app.py</code>, función <code>cargar()</code>) hay una consulta SQL que cruza tres tablas:</p>
+<pre><code class="language-sql">SELECT p.customer_id, p.churn_real, p.churn_pred, p.churn_proba, ...
+FROM predicciones p
+LEFT JOIN clientes c ON p.customer_id = c.customer_id
+</code></pre>
+<p>Es decir, junta las <strong>predicciones del modelo</strong> (<code>predicciones</code>) con los <strong>datos limpios del cliente</strong> (<code>clientes</code>, que dejó el pipeline) y con los <strong>logs de la última corrida</strong> (<code>carga_logs</code>). Tres salidas de distintas etapas, unidas en un solo panel. Esto es precisamente la <em>integración</em> que pide el título de la actividad.</p>
+<p>Detalle honesto que conviene saber: las <strong>métricas de calidad</strong> (recall, F1, etc.) no se calculan sobre toda la base, sino que se leen del <strong>registro del modelo</strong> (<code>modelo_artefacto</code>, sobre el holdout de 2.113 clientes). El scoring de riesgo, en cambio, se aplica a todos los clientes puntuados. Por eso el panel separa "métricas sobre holdout" de "scoring de la base". Además, si la base está caída (free tier dormido), el dashboard <strong>no se rompe</strong>: cae a un CSV local (<code>predicciones_test.csv</code>) como respaldo (el <code>except</code> de <code>cargar()</code>).</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "El dashboard lee la tabla <code>predicciones</code> de Supabase con un JOIN: cruza la predicción del modelo con los datos del cliente que dejó el pipeline. No exportamos archivos a mano; si entrenamos de nuevo, el panel se actualiza solo. Eso es lo que la rúbrica llama 'conexión real con el pipeline', no manual."</p>
+</blockquote>
+<h3>Los componentes del dashboard (y por qué cada uno)</h3>
+<p>La guía trae una tabla de "<strong>qué visualización usar según el tipo de modelo</strong>". Nuestro panel implementa esa tabla casi punto por punto. Lo importante en la defensa es saber decir <em>qué muestra cada cosa</em> y <em>por qué se eligió ese gráfico</em>.</p>
+<p><strong>1. KPIs (indicadores numéricos).</strong> Arriba del todo hay 6 cajas con un número grande cada una: <strong>Recall, F1, Precision, Accuracy, Gini y "Clientes en riesgo"</strong>. Un KPI sirve para mostrar <em>de un solo vistazo</em> si el modelo funciona bien. Pusimos el <strong>Recall primero</strong> (79,7%) a propósito, porque es la métrica que prioriza el caso de churn: de los que se van, cuántos detectamos. La caja de Accuracy lleva una advertencia escondida (<code>help</code>) que dice: <em>"Engañosa con desbalance: 'todo No-churn' daría ~73,5%"</em> — para no caer en la trampa del accuracy alto.</p>
+<p><strong>2. Matriz de confusión (heatmap).</strong> Es un mapa de calor 2×2 (<code>px.imshow</code>) que muestra los aciertos en la diagonal y los errores fuera de ella. Lo que recalcamos en el texto del panel es el <strong>Falso Negativo</strong>: el cliente que se va y <em>no</em> detectamos — "el error más caro". Esto conecta directo con la teoría del ramo: el heatmap "permite ver dónde se equivoca el modelo".</p>
+<p><strong>3. Tabla filtrable de errores ("Análisis de errores caso a caso").</strong> Es una tabla dinámica que se puede filtrar por <strong>tipo de caso</strong> (Falso Negativo / Falso Positivo / Acierto), por <strong>contrato</strong> y por un <strong>slider de probabilidad de churn ≥</strong>. La guía lo justifica perfecto: <em>"a veces no basta con los promedios, hay que mirar el detalle de cada error"</em>. Por defecto el filtro viene marcado solo en los "Falso…", para ir directo a los errores.</p>
+<p><strong>4. Tasa de churn por segmento.</strong> Un gráfico de barras que agrupa el churn real por <strong>tipo de contrato, servicio de internet, método de pago o antigüedad</strong>. Esto es lo que detecta <em>patrones de negocio</em>: por ejemplo, que el contrato mes a mes concentra el abandono. Es la parte más "accionable" para el área comercial.</p>
+<p><strong>5. Embudo (funnel) por etapa del pipeline.</strong> Abajo hay un embudo (<code>go.Funnel</code>) con tres niveles: <strong>Ingesta (leídos) → Validados/insertados → Rechazados</strong>. La guía lo llama "Volumen por etapa / flujo del pipeline" y sirve para <em>detectar cuellos de botella o errores operativos</em> (cuántos datos entraron, cuántos se descartaron). En nuestro caso muestra cómo de los registros leídos quedaron 7.043 cargados, y cuántos fueron a la tabla de auditoría (<code>clientes_rechazados</code>).</p>
+<p>(También hay una <strong>comparativa de modelos</strong> en barras, que muestra cómo la Regresión Logística balanceada sacrifica accuracy para subir recall frente a las otras.)</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Cada gráfico está elegido a propósito: heatmap para ver los errores del modelo, KPIs para la calidad de un vistazo, tabla filtrable para el detalle caso a caso, barras por segmento para los patrones de negocio, y el embudo para el volumen del pipeline. No es decoración: cada visual responde una pregunta distinta."</p>
+</blockquote>
+<h3>Buenas prácticas de visualización aplicadas</h3>
+<p>El ramo pide aplicar dos principios clave, y los usamos de forma deliberada:</p>
+<ul>
+<li><strong>Data-ink ratio (Tufte):</strong> mostrar solo la tinta que aporta información y eliminar adornos. En el código se ve: quitamos la barra de color de la matriz (<code>coloraxis_showscale=False</code>), márgenes mínimos, sin leyendas innecesarias (<code>showlegend=False</code>), sin títulos de eje redundantes. Cada pixel del panel comunica un dato.</li>
+<li><strong>Simplicidad visual:</strong> una paleta de <strong>solo tres colores con significado</strong>: azul (neutral/modelo), <strong>rojo = riesgo/error</strong> y <strong>verde = ok/validado</strong>. Nada de gráficos 3D ni efectos. El rojo siempre marca lo malo (falsos negativos, rechazados, churn), así el ojo va solo a lo importante.</li>
+<li><strong>Diseño iterativo (MVP):</strong> partimos de un panel mínimo y le fuimos agregando paneles según lo que necesitábamos contar.</li>
+</ul>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Aplicamos data-ink ratio: sacamos todo lo que no aporta —barras de color, leyendas de más— y usamos solo tres colores con significado, donde el rojo siempre es riesgo. Así el panel se lee rápido y sin ruido, que es justo lo que pide la simplicidad visual."</p>
+</blockquote>
+<h3>La demo en vivo (vacío → entrenar → predecir → se llena)</h3>
+<p>Esta es la parte que demuestra que la integración es <strong>real y automática</strong>, no una imagen pegada. El dashboard tiene tres botones que llaman a nuestros microservicios:</p>
+<ol>
+<li><strong>Estado inicial: panel vacío.</strong> Con el botón "Vaciar TODO" se truncan las tablas <code>modelo_artefacto</code> y <code>predicciones</code>. El panel muestra el aviso <em>"No hay modelo entrenado"</em> y los KPIs en "—".</li>
+<li><strong>Botón 1 — Entrenar:</strong> hace <code>POST /train</code> al <strong>microservicio trainer</strong>, que entrena la Regresión Logística y guarda el modelo serializado en <code>modelo_artefacto</code>.</li>
+<li><strong>Botón 2 — Predecir:</strong> hace <code>POST /predict/batch</code> al <strong>microservicio predictor</strong>, que carga ese modelo y puntúa a los clientes, escribiendo en <code>predicciones</code>.</li>
+<li><strong>El panel se llena solo.</strong> Aquí está lo bonito: un <em>fragmento con auto-refresh</em> (<code>@st.fragment(run_every=3)</code>, la función <code>_auto_fill_watcher</code>) revisa la base <strong>cada 3 segundos</strong>; cuando detecta que aparecieron el modelo o las predicciones, recarga el panel completo. Por eso podemos entrenar/predecir <strong>desde el Swagger de la API</strong> (sin tocar el dashboard) y el panel <strong>se actualiza solo</strong>.</li>
+</ol>
+<p>Esto demuestra exactamente lo que el ramo pone como ventaja del flujo conectado: <em>"aseguras que siempre se vean los datos más recientes"</em> y <em>"evitas tener que exportar manualmente archivos"</em>.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "En la demo arrancamos con el panel vacío. Entrenamos desde el Swagger del trainer y predecimos desde el del predictor; no tocamos el dashboard. A los pocos segundos el panel se llena solo, porque vigila la base cada 3 segundos. Eso prueba que la integración es automática y en vivo, no una captura."</p>
+</blockquote>
+<hr />
+<h3>Limitaciones del sistema (con evidencia medida)</h3>
+<p>Un punto fino que pide el ramo: <strong>distinguir una limitación de un error.</strong> Un <strong>error</strong> es un fallo del sistema (algo que no funciona, un bug). Una <strong>limitación</strong> es un <em>límite técnico u operativo conocido y gestionable</em> del alcance actual: el sistema funciona, pero tiene fronteras. <strong>Ninguna de nuestras limitaciones es un error.</strong> Y cada una se apoya en un número medido, no en una opinión:</p>
+<table>
+<thead>
+<tr>
+<th>Limitación</th>
+<th>Evidencia (número real)</th>
+<th>Por qué importa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>L1 — RandomForest sobreajusta</strong></td>
+<td>Recall en train <strong>100%</strong> vs test <strong>63,5%</strong> (gap ~+0,22)</td>
+<td>El RF por defecto <em>memoriza</em> los datos de entrenamiento y no generaliza. Por eso <strong>descartamos el RF</strong> y elegimos la Regresión Logística.</td>
+</tr>
+<tr>
+<td><strong>L2 — Precisión baja / falsas alarmas</strong></td>
+<td>LogReg balanceada: recall 79,7% pero <strong>precision ~51%</strong> (431 falsos positivos)</td>
+<td>Señalamos a clientes que en realidad no se iban → la campaña de retención gasta en gente de más.</td>
+</tr>
+<tr>
+<td><strong>L3 — Latencia de red domina</strong></td>
+<td>Lectura en la nube <strong>3,94 s</strong> vs local 0,018 s (~<strong>219×</strong> más lenta)</td>
+<td>El cuello de botella no es el cómputo (entrenar toma 1,34 s), es la conexión a Supabase.</td>
+</tr>
+<tr>
+<td><strong>L4 — Dataset pequeño y desbalanceado</strong></td>
+<td>7.043 filas, solo <strong>26,5% churn</strong></td>
+<td>Limita la robustez; con pocos casos de la clase minoritaria el modelo generaliza peor.</td>
+</tr>
+<tr>
+<td><strong>L5 — Free tier se duerme</strong></td>
+<td>Supabase/Railway se suspenden por inactividad</td>
+<td>Riesgo operativo: el primer request tras la inactividad tarda o falla (por eso el dashboard tiene respaldo a CSV).</td>
+</tr>
+<tr>
+<td><strong>L6 — Dependencias con CVEs</strong></td>
+<td><code>pip-audit</code>: <strong>10 CVEs</strong> en 3 paquetes (starlette/dotenv/pytest)</td>
+<td>Superficie de vulnerabilidad conocida; starlette viene acoplada a FastAPI.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Limitación no es lo mismo que error. El sistema funciona; lo que tiene son fronteras conocidas y medidas. Por ejemplo, que el RandomForest sobreajuste (100% en train, 63,5% en test) no es un bug: es la razón documentada por la que elegimos la Regresión Logística. Cada limitación la respaldo con un número, no con una corazonada."</p>
+</blockquote>
+<h3>Propuestas de mejora (preventiva vs correctiva)</h3>
+<p>Otra distinción que conviene tener clara para el indicador 10:</p>
+<ul>
+<li><strong>Mejora correctiva:</strong> <em>arregla un problema que ya existe y medimos.</em> (Reacciona a una limitación detectada.)</li>
+<li><strong>Mejora preventiva:</strong> <em>evita un problema futuro o refuerza algo que aún no falla.</em> (Se anticipa.)</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Mejora</th>
+<th>Atiende</th>
+<th>Tipo</th>
+<th>Beneficio</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>M2 — Ajustar el umbral de decisión</strong> (no 0,5) según costo FN/FP, o rankear por probabilidad (top-N riesgo)</td>
+<td>L2</td>
+<td><strong>Correctiva</strong></td>
+<td>Sube la precisión sin perder recall → campañas de retención más eficientes. <em>(La más fácil: ya tenemos las probabilidades.)</em></td>
+</tr>
+<tr>
+<td><strong>M1 — Regularizar/tunear el RandomForest</strong> (<code>max_depth</code>, <code>min_samples_leaf</code>)</td>
+<td>L1</td>
+<td><strong>Correctiva</strong></td>
+<td>Reduce el sobreajuste; mejor generalización.</td>
+</tr>
+<tr>
+<td><strong>M6 — Actualizar dependencias</strong> (<code>python-dotenv</code>→1.2.2, plan upgrade FastAPI+Starlette)</td>
+<td>L6</td>
+<td><strong>Correctiva + Preventiva</strong></td>
+<td>Cierra los 10 CVEs conocidos.</td>
+</tr>
+<tr>
+<td><strong>M4 — Validación cruzada k-fold</strong> + más feature engineering</td>
+<td>L4</td>
+<td><strong>Preventiva</strong></td>
+<td>Evaluación más robusta y estable (no depende de un solo split).</td>
+</tr>
+<tr>
+<td><strong>M3 — Cachear lecturas / materializar vistas</strong> (acercar el cómputo a los datos)</td>
+<td>L3</td>
+<td><strong>Preventiva</strong></td>
+<td>Baja la latencia dominante (219×).</td>
+</tr>
+<tr>
+<td><strong>M5 — Keep-alive programado o tier pago</strong></td>
+<td>L5</td>
+<td><strong>Preventiva</strong></td>
+<td>Disponibilidad garantizada para la demo y producción.</td>
+</tr>
+<tr>
+<td><strong>M7 — Conectar el dashboard con el rol <code>telco_lectura</code></strong> (solo lectura)</td>
+<td>seguridad</td>
+<td><strong>Preventiva</strong></td>
+<td>Privilegio mínimo en producción.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Priorización realista</strong> para un equipo de 2 (cómo se implementarían): primero <strong>M2 y M1</strong> (máximo impacto en la calidad del modelo y bajo costo, porque ya tenemos las probabilidades y el pipeline sklearn) → luego <strong>M6 y M7</strong> (seguridad, cambios acotados) → después <strong>M3/M5</strong> (rendimiento/disponibilidad, dependen de la nube). Cada mejora es <strong>incremental</strong> sobre lo construido: ninguna obliga a rehacer el pipeline.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> "Correctiva arregla algo que ya medimos mal; preventiva se anticipa a un problema futuro. Nuestra mejora estrella es correctiva y barata: ajustar el umbral de decisión (M2). Como ya guardamos la probabilidad de cada cliente, en vez de cortar en 0,5 podemos rankear por riesgo y atacar el top-N, subiendo la precisión sin sacrificar el recall, sin reentrenar nada."</p>
+</blockquote>
+<hr />
+<p><strong>Rutas de los archivos fuente (todas absolutas):</strong>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\dashboard\app.py</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\outputs\limitaciones_mejoras.md</code>
+- <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\3.4.1 Visualización e integración del sistema.pdf</code></p>
+<hr />
+<h2>Banco de preguntas y respuestas para la defensa</h2>
+<blockquote>
+<p><strong>Por qué esta sección es la más importante.</strong> El <strong>70% de la nota es individual y oral</strong>: el docente le pregunta al azar a cualquiera de los dos (Benjamín o Diego) y la respuesta de cada uno define <strong>su propia</strong> calificación. Ese 70% se reparte en tres indicadores:
+- <strong>Indicador 8 (30%)</strong> — métricas del modelo: justificar las decisiones técnicas y responder preguntas sobre rendimiento.
+- <strong>Indicador 9 (30%)</strong> — seguridad y ley de datos personales: defender las medidas y vincularlas a la normativa chilena.
+- <strong>Indicador 10 (10%)</strong> — mejoras: explicar cómo implementarían las optimizaciones propuestas.</p>
+<p>Regla de oro: <strong>ambos dominan TODO</strong>. No sirve "Benjamín sabe métricas y Diego seguridad", porque la pregunta de seguridad le puede tocar a Benjamín. Las respuestas de abajo están redactadas para decirse <strong>de memoria, cortas y con el número real</strong>.</p>
+</blockquote>
+<hr />
+<h3>Parte A — Las 10 preguntas de la Evaluación Formativa N°3 (resueltas)</h3>
+<p>La Formativa N°3 es un quiz de selección única de 10 preguntas que el propio docente preparó. <strong>No es la defensa</strong>, pero es la mejor señal de qué conceptos considera clave: si lo preguntó en el quiz, es muy probable que lo pregunte en la oral. Memoricen no solo la letra correcta, sino el <strong>por qué</strong> (que es lo que les pedirán defender en vivo).</p>
+<p><strong>P1. ¿Cuál es la diferencia principal entre la variable objetivo y las variables predictoras?</strong>
+<strong>Respuesta: D —</strong> La variable objetivo es lo que se quiere predecir; las predictoras son las entradas usadas para hacerlo.
+<em>Por qué:</em> en nuestro caso la <strong>variable objetivo es <code>churn</code></strong> (Sí/No: el cliente se va o se queda) y las <strong>predictoras</strong> son los atributos del cliente (tipo de contrato, antigüedad/tenure, servicio de internet, método de pago, etc.). Las otras opciones son trampas: la objetivo NO tiene por qué ser numérica (la nuestra es categórica binaria), SÍ depende de datos históricos (aprende del pasado), y las predictoras SÍ influyen en el resultado.</p>
+<p><strong>P2. En los logs, ¿qué significan accesos fallidos repetidos?</strong>
+<strong>Respuesta: A —</strong> Posibles intentos de fuerza bruta / hackeo.
+<em>Por qué:</em> muchos intentos de login fallidos seguidos son la firma típica de un <strong>ataque de fuerza bruta</strong> (probar contraseñas en masa). Por eso se monitorean como <strong>evento de seguridad</strong>, no como un problema de rendimiento ni un error benigno.</p>
+<p><strong>P3. ¿Cuál de estas acciones pertenece a la evaluación (no al entrenamiento)?</strong>
+<strong>Respuesta: D —</strong> Comparar predicciones con valores reales y calcular las métricas definidas.
+<em>Por qué:</em> es exactamente la separación <strong>trainer vs predictor</strong> de nuestro sistema. <strong>Entrenar</strong> = ajustar el modelo a los datos (<code>fit()</code>, cargar X_train, tocar hiperparámetros). <strong>Evaluar</strong> = ya con el modelo entrenado, predecir sobre el holdout y comparar contra la verdad para sacar recall, F1, Gini. Las opciones A, B y C son todas parte del entrenamiento.</p>
+<p><strong>P4. ¿Qué acción concreta aplica el principio de privilegios mínimos?</strong>
+<strong>Respuesta: B —</strong> Definir roles de acceso mínimo (IAM, roles de BD).
+<em>Por qué:</em> privilegio mínimo = <strong>cada quien solo lo justo para su tarea</strong>. En el proyecto lo aplicamos con un <strong>rol solo-lectura</strong> para el dashboard/analítica y el rol dueño solo para el pipeline. Usar una cuenta admin para todo, guardar claves en el código o abrir más puertos son lo <strong>contrario</strong>.</p>
+<p><strong>P5. ¿Cuál de las siguientes es una métrica de regresión (no de clasificación)?</strong>
+<strong>Respuesta: D —</strong> MAE (Error Absoluto Medio).
+<em>Por qué:</em> F1, recall y precision son métricas de <strong>clasificación</strong> (predecir una clase, como churn Sí/No) — las que usamos nosotros. El MAE mide error de un número continuo, propio de <strong>regresión</strong>. Esto refuerza que nuestro problema es <strong>clasificación binaria</strong>, por eso reportamos recall y matriz de confusión, no MAE.</p>
+<p><strong>P6. ¿Por qué es importante la estratificación al separar entrenamiento y prueba en clasificación?</strong>
+<strong>Respuesta: D —</strong> Para que ambas clases queden representadas de forma equilibrada en ambos conjuntos.
+<em>Por qué:</em> con un <strong>desbalance de 26,5%</strong> (solo 1 de cada 4 clientes se va), un split al azar podría dejar pocos casos de churn en el test. Estratificar <strong>mantiene ese 26,5% tanto en train como en test</strong>, de modo que las métricas sean confiables. No tiene nada que ver con velocidad ni memoria.</p>
+<p><strong>P7. ¿Cuál es el resultado esperado al evaluar configuraciones inseguras o accesos no protegidos?</strong>
+<strong>Respuesta: B —</strong> Que los accesos estén controlados y limitados a quienes corresponda.
+<em>Por qué:</em> el objetivo de una auditoría de seguridad es <strong>cerrar lo abierto</strong>: por eso nuestra base tiene <strong>RLS cerrado por defecto</strong> (Row-Level Security) y solo abrimos lo justo. Dejar la base pública, abrir todos los puertos o hacer la autenticación opcional es justo lo que la auditoría busca <strong>eliminar</strong>.</p>
+<p><strong>P8. ¿Cuál de estos elementos NO forma parte de la revisión de seguridad inicial del pipeline?</strong>
+<strong>Respuesta: A —</strong> Colores del dashboard.
+<em>Por qué:</em> la revisión de seguridad mira <strong>puertos abiertos, contraseñas/claves y accesos/permisos</strong>. Los colores del dashboard son estética, no seguridad. (Ojo, es pregunta "trampa por negación": piden lo que <strong>NO</strong> corresponde.)</p>
+<p><strong>P9. ¿Qué herramienta ayuda a detectar vulnerabilidades en imágenes/librerías del entorno?</strong>
+<strong>Respuesta: D —</strong> trivy.
+<em>Por qué:</em> <strong>trivy</strong> es un escáner de vulnerabilidades de imágenes de contenedor y dependencias (en la misma familia que <strong>pip-audit</strong>, que nosotros usamos y que encontró <strong>10 CVEs</strong>). <code>netstat</code> mira conexiones de red, <code>ping</code> prueba conectividad y <code>tail -f</code> solo sigue logs: ninguno escanea vulnerabilidades.</p>
+<p><strong>P10. ¿Qué describe mejor el sobreajuste (overfitting)?</strong>
+<strong>Respuesta: C —</strong> Alto desempeño en entrenamiento, pero bajo en prueba (memoriza en vez de generalizar).
+<em>Por qué:</em> es <strong>literalmente lo que nos pasó con el RandomForest</strong>: recall <strong>100% en train</strong> y solo <strong>63,5% en test</strong>. Memorizó los datos de entrenamiento y no generaliza. La opción B (malo en ambos) es <em>underfitting</em>, no overfitting.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> estas 10 preguntas son el "mapa mental" del profe — fíjense que <strong>6 de 10 son de seguridad/ley y métricas</strong>, justo el 60% individual. Si dominan el <em>por qué</em> de cada una (no solo la letra), ya tienen cubierto el grueso de las preguntas orales.</p>
+</blockquote>
+<hr />
+<h3>Parte B — Banco de preguntas probables de la defensa (respuestas modelo para decir en voz alta)</h3>
+<p>Agrupadas por indicador. Cada respuesta está pensada para decirse en 15–25 segundos, con el número real adentro.</p>
+<h4>Indicador 8 — Métricas del modelo (30%)</h4>
+<p><strong>P. ¿Por qué priorizaron el recall y no el accuracy?</strong>
+<strong>R.</strong> Porque con un desbalance del 26,5%, el accuracy engaña: un modelo que dijera "nadie se va" acertaría un 73,5% sin detectar a un solo cliente en riesgo. El recall mide cuántos de los que de verdad se van logramos detectar; nuestro modelo alcanza <strong>79,7% (detecta 447 de 561 fugas)</strong>. En retención, no detectar una fuga es el error más caro, así que optimizamos recall.</p>
+<p><strong>P. ¿Qué es un Falso Negativo (FN) en este caso y por qué es el error más grave?</strong>
+<strong>R.</strong> Un FN es un cliente que <strong>sí se va a ir, pero el modelo dijo que no</strong>. Es el peor error porque lo perdemos sin haber hecho nada: no le ofrecimos retención. Un Falso Positivo (predecir que se va y se queda) solo cuesta una llamada o un descuento innecesario; el FN cuesta el cliente entero. Por eso bajar los FN (subir recall) es la prioridad.</p>
+<p><strong>P. ¿Qué es la matriz de confusión y qué muestra la de ustedes?</strong>
+<strong>R.</strong> Es la tabla que cruza lo que el modelo predijo contra la realidad: Verdaderos Positivos, Verdaderos Negativos, Falsos Positivos y Falsos Negativos. Sobre el holdout de <strong>2.113 clientes</strong>, nos interesan sobre todo los <strong>447 churn detectados (TP)</strong> frente a los FN. De ahí salen recall, precisión y F1; es la base de toda la interpretación.</p>
+<p><strong>P. ¿Qué es el coeficiente de Gini y qué significa el 0,69 de ustedes?</strong>
+<strong>R.</strong> El Gini mide el <strong>poder discriminante</strong> del modelo, qué tan bien separa a los que se van de los que se quedan. Se calcula como <strong>Gini = 2 × AUC − 1</strong>; con nuestra ROC-AUC de 0,85 da <strong>0,69</strong>. La escala va de 0 (azar, una moneda) a 1 (perfecto), así que 0,69 es un modelo <strong>bueno</strong>, claramente lejos del azar.</p>
+<p><strong>P. ¿Qué es el overfitting y dónde lo vieron en su proyecto?</strong>
+<strong>R.</strong> Overfitting es cuando el modelo <strong>memoriza</strong> el entrenamiento en vez de aprender el patrón, y por eso falla con datos nuevos. Lo vimos en el <strong>RandomForest por defecto: 100% de recall en train y solo 63,5% en test</strong> — esa brecha enorme es la señal. Por eso lo descartamos y elegimos la <strong>Regresión Logística balanceada</strong>, que generaliza mejor (recall 79,7% en test).</p>
+<p><strong>P. ¿Por qué eligieron Regresión Logística balanceada en vez del RandomForest?</strong>
+<strong>R.</strong> Por tres razones: el RF <strong>sobreajustaba</strong> (100% train / 63,5% test), la LogReg balanceada da mejor recall en datos nuevos (<strong>79,7%</strong>), y además es <strong>interpretable</strong> — podemos explicar por qué clasifica a un cliente como riesgo, lo que importa para retención y para la ley de datos. El "balanceada" viene del <code>class_weight</code>, que compensa el desbalance del 26,5%.</p>
+<p><strong>P. ¿Por qué estratificaron el split 70/30?</strong>
+<strong>R.</strong> Para que la proporción de churn (26,5%) se mantenga igual en train y en test. Con desbalance, un split aleatorio podría dejar muy pocos casos de fuga en el test y dar métricas poco confiables. El 70/30 estratificado nos deja <strong>2.113 clientes en el holdout</strong> con la misma proporción de clases que el total.</p>
+<p><strong>P. ¿Por qué <code>class_weight</code> y no SMOTE para el desbalance?</strong>
+<strong>R.</strong> Porque el desbalance es <strong>moderado</strong> (26,5%, no 1%). <code>class_weight='balanced'</code> resuelve el problema en <strong>una línea</strong>, haciendo que el modelo "pese" más los errores sobre la clase minoritaria, <strong>sin inventar datos sintéticos</strong> como SMOTE y sin riesgo de fuga de datos. Es la solución más simple y robusta para nuestro caso.</p>
+<p><strong>P. ¿Qué diferencia hay entre entrenar (train) y predecir (predict) en su arquitectura?</strong>
+<strong>R.</strong> Las separamos en <strong>dos microservicios</strong>. El <strong>trainer</strong> (<code>POST /train</code>) ajusta el modelo con los datos y guarda el modelo serializado en la tabla <code>modelo_artefacto</code> de Supabase. El <strong>predictor</strong> (<code>/metrics</code>, <code>/predict/cliente/{id}</code>, <code>/predict/batch</code>) <strong>carga ese modelo ya entrenado y solo predice, sin re-entrenar</strong>. Es la misma imagen Docker; el rol lo decide la variable <code>ROL</code> — patrón "un contenedor por capa".</p>
+<p><strong>P. ¿Por qué accuracy 74,2% no es una buena noticia por sí sola?</strong>
+<strong>R.</strong> Porque el "modelo tonto" que dice que nadie se va ya da <strong>73,5%</strong> solo por el desbalance. Nuestro 74,2% apenas lo supera en accuracy, pero la diferencia real está en que <strong>sí detectamos fugas</strong> (recall 79,7%). Por eso nunca defendemos el modelo con el accuracy solo; lo acompañamos siempre de recall, F1 (0,62) y Gini (0,69).</p>
+<h4>Indicador 9 — Seguridad y ley de datos (30%)</h4>
+<p><strong>P. ¿Qué ley de protección de datos aplica a este proyecto?</strong>
+<strong>R.</strong> En Chile aplica la <strong>Ley 19.628 de datos personales, modernizada por la Ley 21.719</strong>, que la lleva a un <strong>nivel tipo GDPR</strong> y entra en vigencia plena el <strong>01-12-2026</strong>. Como esa fecha es inminente, diseñamos con enfoque <strong>"compliance by design"</strong>: incorporamos las medidas desde el inicio en vez de parchar después.</p>
+<p><strong>P. ¿Qué datos personales maneja el sistema? ¿Hay datos sensibles?</strong>
+<strong>R.</strong> Maneja datos <strong>personales</strong> del cliente: género, si es adulto mayor, situación familiar (pareja/dependientes) y datos económicos como cargos y método de pago. <strong>No hay datos sensibles en sentido estricto</strong> (la ley reserva "sensibles" para salud, origen étnico, religión, ideología, vida sexual, datos biométricos). Aun así los tratamos con cuidado porque siguen siendo personales y protegidos.</p>
+<p><strong>P. ¿Cómo aplican el principio de privilegio mínimo?</strong>
+<strong>R.</strong> Cada componente recibe <strong>solo los permisos que necesita</strong>. El pipeline de ingesta usa un rol con permisos de escritura; el dashboard y la analítica usan un <strong>rol solo-lectura</strong> que no puede modificar nada; y para los roles públicos la base está <strong>cerrada por defecto</strong> con RLS. Así, si una credencial se filtra, el daño posible es mínimo.</p>
+<p><strong>P. ¿Qué es RLS y cómo lo usan?</strong>
+<strong>R.</strong> RLS es <strong>Row-Level Security</strong>, una función de PostgreSQL/Supabase que controla el acceso <strong>fila por fila</strong>. Lo dejamos <strong>cerrado por defecto</strong>: si una política no autoriza explícitamente, no se ve ningún dato. Es la diferencia entre "abierto salvo que lo cierres" y "cerrado salvo que lo abras" — nosotros elegimos lo segundo, que es lo seguro.</p>
+<p><strong>P. ¿Qué es trivy / pip-audit y qué encontraron?</strong>
+<strong>R.</strong> Son <strong>escáneres de vulnerabilidades</strong>: trivy revisa imágenes de contenedor y librerías, y pip-audit revisa las dependencias de Python contra bases públicas de CVEs. Nosotros corrimos <strong>pip-audit y encontró 10 CVEs</strong>, con su plan de actualización (por ejemplo, subir <code>python-dotenv</code>). Es parte de revisar la cadena de suministro de software, no solo nuestro código.</p>
+<p><strong>P. ¿Qué significan los accesos fallidos repetidos en los logs?</strong>
+<strong>R.</strong> Son la señal típica de un <strong>ataque de fuerza bruta</strong>: alguien probando contraseñas en masa. Por eso los logs no son solo para depurar — los tratamos como <strong>eventos de seguridad</strong> que hay que monitorear para detectar intentos de intrusión y responder a tiempo.</p>
+<p><strong>P. ¿Cómo evitan que se filtren secretos (claves, contraseñas) en el repositorio?</strong>
+<strong>R.</strong> Las credenciales nunca van en el código: viven en <strong>variables de entorno</strong>, y el <code>.env</code> está en <code>.gitignore</code>. Lo verificamos con <strong>grep sobre el código y sobre el historial de git</strong> para confirmar <strong>cero filtraciones</strong>. Ese fue uno de los cuatro frentes de la auditoría, junto con RLS, escaneo de dependencias y logs.</p>
+<p><strong>P. ¿Cuáles fueron los cuatro frentes de su auditoría de seguridad?</strong>
+<strong>R.</strong> Uno, <strong>cero secretos</strong> en el repo (verificado con grep + historial git). Dos, <strong>RLS cerrado por defecto</strong> con rol solo-lectura (privilegio mínimo). Tres, <strong>escaneo de dependencias</strong> con pip-audit (10 CVEs y su plan). Cuatro, <strong>monitoreo de logs</strong> buscando accesos fallidos repetidos. Todo bajo el paraguas "compliance by design" hacia la Ley 21.719.</p>
+<p><strong>P. Si la base es solo-lectura para el dashboard, ¿cómo se llena con predicciones?</strong>
+<strong>R.</strong> Porque el rol que <strong>escribe</strong> predicciones es el del microservicio predictor, no el del dashboard. El dashboard solo <strong>lee</strong> <code>modelo_artefacto</code> y la tabla de predicciones para mostrarlas. Es exactamente privilegio mínimo: el que muestra datos no necesita permiso para modificarlos, y no lo tiene.</p>
+<h4>Indicador 10 — Limitaciones y mejoras (10%)</h4>
+<p><strong>P. ¿Qué limitaciones reconocen en el sistema?</strong>
+<strong>R.</strong> Tres principales: la <strong>precisión es baja</strong> (priorizamos recall, así que generamos varios falsos positivos), el RandomForest <strong>sobreajustaba</strong> (por eso lo descartamos), y el <strong>cuello de botella es la latencia de red</strong>, no el cómputo — el benchmark mostró <strong>3,9 s en la nube vs 0,018 s en local</strong>. Reconocerlas es parte de la nota; lo importante es que cada una tiene una mejora asociada.</p>
+<p><strong>P. ¿Qué mejoras propondrían y cómo las implementarían?</strong>
+<strong>R.</strong> Tres concretas. Una, <strong>ajustar el umbral de decisión</strong> (en vez del 0,5 por defecto) para balancear mejor recall y precisión según el costo real de retención. Dos, <strong>regularizar el RandomForest</strong> (limitar <code>max_depth</code>, podar) para reducir su overfitting si lo quisiéramos usar. Tres, <strong>actualizar dependencias</strong> para cerrar los 10 CVEs de pip-audit (p. ej. <code>python-dotenv</code>). Y para la latencia, cachear o acercar el cómputo a la base.</p>
+<p><strong>P. El cuello de botella es la red, no el modelo. ¿Qué harían al respecto?</strong>
+<strong>R.</strong> Como el benchmark mostró que los 3,9 s son <strong>latencia de red</strong>, no cómputo (local: 0,018 s), atacar el modelo no ayudaría. Las mejoras correctas son de <strong>arquitectura</strong>: cachear predicciones frecuentes, hacer scoring por lotes en vez de cliente por cliente, o acercar el predictor a la base de datos para reducir los viajes de red.</p>
+<blockquote>
+<p>💡 <strong>Para la defensa:</strong> cuando les pregunten una mejora, no digan solo <em>qué</em> harían — digan <strong>cómo</strong> y <strong>por qué</strong> (el indicador 10 exige "plan claro y realista para implementar"). Plantilla de respuesta: <em>"El problema X lo arreglaría con la técnica Y, porque produce el beneficio Z"</em>. Ejemplo: <em>"La precisión baja la subiría ajustando el umbral de decisión, porque permite mover el balance recall/precisión según cuánto cuesta una retención, sin re-entrenar el modelo."</em></p>
+</blockquote>
+<hr />
+<blockquote>
+<p>💡 <strong>Para la defensa (cierre de toda la sección):</strong> tres reglas para la oral. (1) <strong>Siempre con el número real</strong> — no digan "buen recall", digan "<strong>recall 79,7%, detecta 447 de 561</strong>". (2) <strong>No leer las slides</strong> — la rúbrica penaliza leer; el apoyo visual complementa, no se recita. (3) <strong>Conecten dato con decisión</strong> — toda métrica termina en una acción de negocio: "detectamos al cliente en riesgo → el equipo de retención lo llama antes de que se vaya". Eso es lo que separa el 100% ("justifica con claridad y precisión") del 60% ("explicaciones confusas o incompletas").</p>
+</blockquote>
+<p><strong>Archivos fuente leídos:</strong> <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\EV FORMATIVA.pdf</code> (las 10 preguntas del quiz), <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\EV PARCIAL 3_ITY1101_ESTUDIANTE.pdf</code> (rúbrica: indicadores 8=30%, 9=30%, 10=10%), <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\outputs\guion_defensa.md</code> (preguntas anticipadas y números del proyecto).</p></body></html>
