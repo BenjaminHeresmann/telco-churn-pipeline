@@ -29,7 +29,7 @@ AZUL = "#1e3a8a"
 ROJO = "#ef4444"
 VERDE = "#22c55e"
 
-st.set_page_config(page_title="Telco Churn — Panel de Riesgo", page_icon="📉", layout="wide")
+st.set_page_config(page_title="Telco Churn — Panel de Riesgo", layout="wide")
 
 
 # ----------------------------------------------------------------- conexion
@@ -104,7 +104,7 @@ def _auto_fill_watcher(hay_modelo_actual: bool, n_pred_actual: int):
     if (_count("modelo_artefacto") > 0) != hay_modelo_actual or _count("predicciones") != n_pred_actual:
         st.cache_data.clear()
         st.rerun(scope="app")
-    st.caption("⏳ Vigilando… el panel se actualizará solo al entrenar o predecir "
+    st.caption("Vigilando… el panel se actualizará solo al entrenar o predecir "
                "(desde los botones o desde los Swagger).")
 
 
@@ -159,7 +159,7 @@ n_eval = int(met_modelo["n_test"]) if met_modelo and met_modelo.get("n_test") el
 hay_modelo = met_modelo is not None
 
 # ------------------------------------------------------------------ cabecera
-st.title("📉 Panel de Riesgo de Abandono — Telco Churn")
+st.title("Panel de Riesgo de Abandono — Telco Churn")
 modelo = pred["modelo"].iloc[0] if "modelo" in pred.columns and len(pred) else "—"
 st.caption(f"Modelo en producción: **{modelo}**  ·  Fuente: {origen}  ·  "
            f"Métricas sobre conjunto de prueba (holdout, {n_eval:,}) · "
@@ -168,14 +168,14 @@ st.caption(f"Modelo en producción: **{modelo}**  ·  Fuente: {origen}  ·  "
 # ------------------------------------------------- panel de demo en vivo
 with st.container():
     b1, b2, b3 = st.columns([1.3, 1.3, 1.4])
-    if b1.button("🔧 1. Entrenar modelo", use_container_width=True,
+    if b1.button("1. Entrenar modelo", use_container_width=True,
                  help="Llama al microservicio trainer (POST /train)"):
         with st.spinner("Entrenando el modelo en la nube…"):
             try:
                 res = _post(f"{TRAINER_URL}/train", timeout=120)
                 rec = res.get("metricas_holdout", {}).get("recall", 0) * 100
                 st.cache_data.clear()
-                st.success(f"✅ Modelo entrenado y guardado en Supabase · recall {rec:.1f}%. "
+                st.success(f"Modelo entrenado y guardado en Supabase · recall {rec:.1f}%. "
                            f"Ahora pulsa **▶ Ejecutar predicción**.")
             except Exception as e:
                 st.error(f"No se pudo entrenar: {e}")
@@ -189,31 +189,31 @@ with st.container():
                     pass
                 res = _post(f"{PREDICTOR_URL}/predict/batch", timeout=120)
                 st.cache_data.clear()
-                st.toast(f"✅ {res.get('clientes_puntuados', 0):,} clientes puntuados · "
-                         f"{res.get('en_riesgo', 0):,} en riesgo", icon="🎯")
+                st.toast(f"{res.get('clientes_puntuados', 0):,} clientes puntuados · "
+                         f"{res.get('en_riesgo', 0):,} en riesgo")
                 st.rerun()
             except Exception as e:
                 st.error(f"No se pudo predecir: {e}")
-    with b3.expander("⚙️ Preparar demo (vaciar)"):
-        if st.button("🧹 Vaciar predicciones (mantener modelo)"):
+    with b3.expander("Preparar demo (vaciar)"):
+        if st.button("Vaciar predicciones (mantener modelo)"):
             _vaciar_predicciones()
             st.cache_data.clear()
             st.rerun()
-        if st.button("🧨 Vaciar TODO (modelo + predicciones)"):
+        if st.button("Vaciar TODO (modelo + predicciones)"):
             _vaciar_todo()
             st.cache_data.clear()
             st.rerun()
 
 if not hay_modelo:
-    st.warning("📭 **No hay modelo entrenado.** Entrénalo desde el **Swagger del trainer** "
-               "(`POST /train`) o el botón **🔧 Entrenar**; luego ejecuta la predicción. "
+    st.warning("**No hay modelo entrenado.** Entrénalo desde el **Swagger del trainer** "
+               "(`POST /train`) o el botón **Entrenar**; luego ejecuta la predicción. "
                "El panel se irá llenando solo, paso a paso.")
 elif len(pred) == 0:
     cw, cb = st.columns([5, 1])
-    cw.warning("📭 **Modelo listo — esperando la predicción.** Lánzala desde el **Swagger del "
+    cw.warning("**Modelo listo — esperando la predicción.** Lánzala desde el **Swagger del "
                "predictor** (`POST /predict/batch`) o el botón **▶ Ejecutar predicción**: "
                "el panel **se llena solo**.")
-    if cb.button("🔄 Actualizar", use_container_width=True):
+    if cb.button("Actualizar", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 if not hay_modelo or len(pred) == 0:
@@ -240,14 +240,14 @@ def _aplicar_preset(p: dict) -> None:
 if hay_modelo:
     for _k, _v in _PRESET_ALTO.items():  # valores iniciales del formulario
         st.session_state.setdefault(f"cn_{_k}", _v)
-    with st.expander("🔮 Predecir un cliente NUEVO (no está en la base — el modelo nunca lo vio)"):
+    with st.expander("Predecir un cliente NUEVO (no está en la base — el modelo nunca lo vio)"):
         st.caption("Arma un cliente en vivo y el modelo estima su **riesgo de fuga** y el "
                    "**porqué**. Es una predicción sobre datos no vistos: no reentrena ni guarda nada; "
                    "consulta al microservicio predictor (`POST /predict/nuevo`).")
         pa, pb, _ = st.columns([1.2, 1.2, 2])
-        if pa.button("😱 Preset: cliente de alto riesgo", use_container_width=True):
+        if pa.button("Preset: cliente de alto riesgo", use_container_width=True):
             _aplicar_preset(_PRESET_ALTO); st.rerun()
-        if pb.button("😌 Preset: cliente fiel", use_container_width=True):
+        if pb.button("Preset: cliente fiel", use_container_width=True):
             _aplicar_preset(_PRESET_FIEL); st.rerun()
 
         g1, g2, g3 = st.columns(3)
@@ -267,7 +267,7 @@ if hay_modelo:
             st.checkbox("Tiene dependientes", key="cn_Dependents")
             st.checkbox("Adulto mayor (senior)", key="cn_SeniorCitizen")
 
-        if st.button("🔮 Predecir riesgo de este cliente", type="primary"):
+        if st.button("Predecir riesgo de este cliente", type="primary"):
             payload = {
                 "Contract": st.session_state.cn_Contract,
                 "tenure": int(st.session_state.cn_tenure),
@@ -303,11 +303,13 @@ if hay_modelo:
                 with ec:
                     st.markdown("**¿Por qué?** Lo que más pesa en esta predicción:")
                     for f in res["factores"]["empujan_a_fuga"]:
-                        st.markdown(f"🔴 **{f['factor']}** &nbsp;<span style='color:#94a3b8'>"
-                                    f"(+{f['peso']})</span>", unsafe_allow_html=True)
+                        st.markdown(f"<span style='color:#ef4444;font-weight:600'>{f['factor']}</span>"
+                                    f" &nbsp;<span style='color:#94a3b8'>(+{f['peso']})</span>",
+                                    unsafe_allow_html=True)
                     for f in res["factores"]["retienen"]:
-                        st.markdown(f"🟢 {f['factor']} &nbsp;<span style='color:#94a3b8'>"
-                                    f"({f['peso']})</span>", unsafe_allow_html=True)
+                        st.markdown(f"<span style='color:#22c55e;font-weight:600'>{f['factor']}</span>"
+                                    f" &nbsp;<span style='color:#94a3b8'>({f['peso']})</span>",
+                                    unsafe_allow_html=True)
                     st.info(res["nota"])
             except Exception as e:
                 st.error(f"No se pudo predecir: {e}")
@@ -345,8 +347,8 @@ with col_a:
                         y=["Real: No churn", "Real: Churn"], aspect="auto")
         fig.update_layout(height=360, coloraxis_showscale=False, margin=dict(l=10, r=10, t=10, b=10))
         st.plotly_chart(fig, use_container_width=True)
-        st.caption(f"Sobre el conjunto de prueba (holdout). 🔴 **{m['FN']} Falsos Negativos** = "
-                   f"clientes que se van y NO detectamos (el error más caro). ✅ {m['TP']} detectados.")
+        st.caption(f"Sobre el conjunto de prueba (holdout). **{m['FN']} Falsos Negativos** = "
+                   f"clientes que se van y NO detectamos (el error más caro). {m['TP']} detectados.")
     else:
         st.info("Entrena el modelo para ver su evaluación (matriz de confusión).")
 
@@ -400,7 +402,7 @@ with col_d:
 st.divider()
 
 # ------------------------------------------------- fila 3: tabla filtrable errores
-st.subheader("🔎 Análisis de errores caso a caso")
+st.subheader("Análisis de errores caso a caso")
 pred = pred.copy()
 pred["tipo"] = "Acierto"
 pred.loc[(pred.churn_real == 1) & (pred.churn_pred == 0), "tipo"] = "Falso Negativo (se fue, no detectado)"
@@ -425,7 +427,7 @@ st.dataframe(vis[cols_tabla].sort_values("churn_proba", ascending=False),
 
 # ------------------------------------------------- fila 4: volumen del pipeline
 st.divider()
-st.subheader("🔧 Volumen por etapa del pipeline DataOps")
+st.subheader("Volumen por etapa del pipeline DataOps")
 if len(logs):
     r = logs.iloc[0]
     leidos = int(r["registros_leidos"]); insertados = int(r["registros_insertados"])
