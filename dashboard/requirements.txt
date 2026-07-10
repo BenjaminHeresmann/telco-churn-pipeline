@@ -3,6 +3,11 @@
 streamlit<1.50
 plotly>=6.0
 pandas==2.1.4
+# numpy y pyarrow FIJADOS: pandas 2.1.4 esta compilado contra numpy 1.x; sin este
+# pin, un rebuild resuelve numpy 2.x -> incompatibilidad binaria -> Segmentation
+# fault al renderizar (crash del servidor). Igual pin que el servicio del modelo.
+numpy==1.26.4
+pyarrow==17.0.0
 sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
 python-dotenv==1.0.0
