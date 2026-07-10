@@ -357,9 +357,11 @@ streamlit run dashboard/app.py
 El modelo se despliega como **dos servicios independientes** ([`src/serve_modelo.py`](src/serve_modelo.py), misma imagen `Dockerfile.modelo`, rol por variable `ROL`) que se comunican **solo vía Supabase** (tabla `modelo_artefacto`) — extendiendo a la capa de IA el patrón "un contenedor por capa" de Eval 2:
 
 - **trainer** (`POST /train`): entrena y **guarda** el modelo en Supabase.
-- **predictor** (`GET /metrics`, `GET /predict/cliente/{id}`, `POST /predict/batch`): **carga** el modelo y predice, **sin re-entrenar**.
+- **predictor** (`GET /metrics`, `GET /predict/cliente/{id}`, `POST /predict/batch`, `POST /predict/nuevo`): **carga** el modelo y predice, **sin re-entrenar**.
 
 El **dashboard se construye en vivo**: arranca vacío (botón **🧨 Vaciar TODO**) y, gracias a un **auto-refresh**, se va llenando solo al ejecutar `POST /train` y `POST /predict/batch` —desde los **Swagger** de los microservicios o desde los botones del dashboard—: aparecen las **métricas al entrenar** y los **clientes al predecir**. Ideal para construir el resultado paso a paso durante la defensa.
+
+**Predicción de un cliente nuevo (demo sobre datos no vistos).** El endpoint `POST /predict/nuevo` (y la sección **🔮 Predecir un cliente NUEVO** del dashboard) estima el riesgo de fuga de un cliente **inventado en vivo, que el modelo nunca vio** — reutilizando el mismo pipeline (preprocesamiento + LogReg). Devuelve la probabilidad, el nivel de riesgo y los **factores que explican la predicción** (contribución `coef × valor` de la Regresión Logística → interpretabilidad, no caja negra). A diferencia del `batch` sobre la base completa, demuestra **generalización** a datos fuera del entrenamiento. No persiste nada: es una predicción efímera.
 
 ```bash
 python src/modelo.py --train      # entrena el modelo final y lo guarda en Supabase

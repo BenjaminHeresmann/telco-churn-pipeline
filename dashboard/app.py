@@ -55,6 +55,15 @@ def _post(url: str, timeout: int = 120) -> dict:
         return json.loads(r.read().decode())
 
 
+def _post_json(url: str, payload: dict, timeout: int = 60) -> dict:
+    """POST con cuerpo JSON a un microservicio del modelo y devuelve el JSON."""
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(url, data=data, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode())
+
+
 def _vaciar_predicciones() -> None:
     """Vacía solo la tabla `predicciones` (mantiene el modelo entrenado)."""
     eng = _engine()
@@ -209,6 +218,99 @@ elif len(pred) == 0:
         st.rerun()
 if not hay_modelo or len(pred) == 0:
     _auto_fill_watcher(hay_modelo, len(pred))
+
+# ------------------------------------ predecir un cliente NUEVO (demo en vivo)
+# Perfiles de ejemplo (rellenan el formulario). Predicen sobre un cliente que el
+# modelo NUNCA vio (no está en la base): demuestra generalización + interpretabilidad.
+_PRESET_ALTO = {"Contract": "Month-to-month", "tenure": 2, "MonthlyCharges": 95.0,
+                "InternetService": "Fiber optic", "PaymentMethod": "Electronic check",
+                "TechSupport": "No", "OnlineSecurity": "No", "PaperlessBilling": True,
+                "Partner": False, "Dependents": False, "SeniorCitizen": True}
+_PRESET_FIEL = {"Contract": "Two year", "tenure": 60, "MonthlyCharges": 45.0,
+                "InternetService": "DSL", "PaymentMethod": "Credit card (automatic)",
+                "TechSupport": "Yes", "OnlineSecurity": "Yes", "PaperlessBilling": False,
+                "Partner": True, "Dependents": True, "SeniorCitizen": False}
+
+
+def _aplicar_preset(p: dict) -> None:
+    for k, v in p.items():
+        st.session_state[f"cn_{k}"] = v
+
+
+if hay_modelo:
+    for _k, _v in _PRESET_ALTO.items():  # valores iniciales del formulario
+        st.session_state.setdefault(f"cn_{_k}", _v)
+    with st.expander("🔮 Predecir un cliente NUEVO (no está en la base — el modelo nunca lo vio)"):
+        st.caption("Arma un cliente en vivo y el modelo estima su **riesgo de fuga** y el "
+                   "**porqué**. Es una predicción sobre datos no vistos: no reentrena ni guarda nada; "
+                   "consulta al microservicio predictor (`POST /predict/nuevo`).")
+        pa, pb, _ = st.columns([1.2, 1.2, 2])
+        if pa.button("😱 Preset: cliente de alto riesgo", use_container_width=True):
+            _aplicar_preset(_PRESET_ALTO); st.rerun()
+        if pb.button("😌 Preset: cliente fiel", use_container_width=True):
+            _aplicar_preset(_PRESET_FIEL); st.rerun()
+
+        g1, g2, g3 = st.columns(3)
+        with g1:
+            st.selectbox("Contrato", ["Month-to-month", "One year", "Two year"], key="cn_Contract")
+            st.selectbox("Servicio de internet", ["Fiber optic", "DSL", "No"], key="cn_InternetService")
+            st.selectbox("Método de pago", ["Electronic check", "Mailed check",
+                         "Bank transfer (automatic)", "Credit card (automatic)"], key="cn_PaymentMethod")
+        with g2:
+            st.slider("Antigüedad (meses)", 0, 72, key="cn_tenure")
+            st.slider("Cargo mensual ($)", 18.0, 119.0, step=0.5, key="cn_MonthlyCharges")
+            st.selectbox("Soporte técnico", ["No", "Yes"], key="cn_TechSupport")
+            st.selectbox("Seguridad online", ["No", "Yes"], key="cn_OnlineSecurity")
+        with g3:
+            st.checkbox("Factura electrónica (paperless)", key="cn_PaperlessBilling")
+            st.checkbox("Tiene pareja", key="cn_Partner")
+            st.checkbox("Tiene dependientes", key="cn_Dependents")
+            st.checkbox("Adulto mayor (senior)", key="cn_SeniorCitizen")
+
+        if st.button("🔮 Predecir riesgo de este cliente", type="primary"):
+            payload = {
+                "Contract": st.session_state.cn_Contract,
+                "tenure": int(st.session_state.cn_tenure),
+                "MonthlyCharges": float(st.session_state.cn_MonthlyCharges),
+                "InternetService": st.session_state.cn_InternetService,
+                "PaymentMethod": st.session_state.cn_PaymentMethod,
+                "TechSupport": st.session_state.cn_TechSupport,
+                "OnlineSecurity": st.session_state.cn_OnlineSecurity,
+                "PaperlessBilling": bool(st.session_state.cn_PaperlessBilling),
+                "Partner": bool(st.session_state.cn_Partner),
+                "Dependents": bool(st.session_state.cn_Dependents),
+                "SeniorCitizen": int(st.session_state.cn_SeniorCitizen),
+            }
+            try:
+                with st.spinner("Consultando al microservicio predictor…"):
+                    res = _post_json(f"{PREDICTOR_URL}/predict/nuevo", payload)
+                proba = res["probabilidad_churn"] * 100
+                nivel = res["nivel_riesgo"]
+                color = ROJO if nivel == "alto" else VERDE if nivel == "bajo" else "#f59e0b"
+                gc, ec = st.columns([1, 1.2])
+                with gc:
+                    fig = go.Figure(go.Indicator(
+                        mode="gauge+number", value=proba, number={"suffix": "%"},
+                        title={"text": f"Riesgo de fuga · nivel <b>{nivel.upper()}</b>"},
+                        gauge={"axis": {"range": [0, 100]}, "bar": {"color": color},
+                               "steps": [{"range": [0, 30], "color": "#dcfce7"},
+                                         {"range": [30, 50], "color": "#fef9c3"},
+                                         {"range": [50, 100], "color": "#fee2e2"}],
+                               "threshold": {"line": {"color": "black", "width": 3},
+                                             "thickness": 0.75, "value": 50}}))
+                    fig.update_layout(height=280, margin=dict(l=20, r=20, t=70, b=10))
+                    st.plotly_chart(fig, use_container_width=True)
+                with ec:
+                    st.markdown("**¿Por qué?** Lo que más pesa en esta predicción:")
+                    for f in res["factores"]["empujan_a_fuga"]:
+                        st.markdown(f"🔴 **{f['factor']}** &nbsp;<span style='color:#94a3b8'>"
+                                    f"(+{f['peso']})</span>", unsafe_allow_html=True)
+                    for f in res["factores"]["retienen"]:
+                        st.markdown(f"🟢 {f['factor']} &nbsp;<span style='color:#94a3b8'>"
+                                    f"({f['peso']})</span>", unsafe_allow_html=True)
+                    st.info(res["nota"])
+            except Exception as e:
+                st.error(f"No se pudo predecir: {e}")
 
 # Gini: del modelo en producción (holdout); si no, de la comparativa
 gini = m.get("gini")

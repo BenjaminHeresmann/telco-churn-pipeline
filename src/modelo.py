@@ -246,6 +246,110 @@ def predecir_cliente(pipe: Pipeline, customer_id: str, engine) -> dict:
     }
 
 
+# ------------------------------------- prediccion de un cliente NUEVO (demo en vivo)
+# Plantilla con los 19 predictores (nombres de esquema CSV) y defaults reales del
+# dataset (modas categoricas / medianas numericas). Lo que el usuario no especifique
+# se completa con estos valores; TotalCharges se autocalcula si no se entrega.
+CLIENTE_TEMPLATE = {
+    "gender": "Male", "SeniorCitizen": 0, "Partner": False, "Dependents": False,
+    "tenure": 29, "PhoneService": True, "MultipleLines": "No",
+    "InternetService": "Fiber optic", "OnlineSecurity": "No", "OnlineBackup": "No",
+    "DeviceProtection": "No", "TechSupport": "No", "StreamingTV": "No",
+    "StreamingMovies": "No", "Contract": "Month-to-month", "PaperlessBilling": True,
+    "PaymentMethod": "Electronic check", "MonthlyCharges": 70.35, "TotalCharges": None,
+}
+_BIN_COLS = ["SeniorCitizen", "Partner", "Dependents", "PhoneService", "PaperlessBilling"]
+
+# Traducciones para la explicabilidad (nombre tecnico del modelo -> español legible)
+_COL_ES = {
+    "tenure": "Antigüedad", "MonthlyCharges": "Cargo mensual", "TotalCharges": "Cargo total",
+    "Contract": "Contrato", "InternetService": "Servicio de internet",
+    "PaymentMethod": "Método de pago", "TechSupport": "Soporte técnico",
+    "OnlineSecurity": "Seguridad online", "OnlineBackup": "Respaldo online",
+    "DeviceProtection": "Protección de dispositivo", "StreamingTV": "Streaming TV",
+    "StreamingMovies": "Streaming películas", "MultipleLines": "Líneas múltiples",
+    "PhoneService": "Servicio telefónico", "PaperlessBilling": "Factura electrónica",
+    "Partner": "Pareja", "Dependents": "Dependientes", "SeniorCitizen": "Adulto mayor",
+    "gender": "Género",
+}
+_VAL_ES = {
+    "Month-to-month": "Mes a mes", "One year": "Un año", "Two year": "Dos años",
+    "Fiber optic": "Fibra óptica", "DSL": "DSL", "No": "No", "Yes": "Sí",
+    "Electronic check": "Cheque electrónico", "Mailed check": "Cheque por correo",
+    "Bank transfer (automatic)": "Transferencia bancaria",
+    "Credit card (automatic)": "Tarjeta de crédito", "No internet service": "Sin internet",
+    "No phone service": "Sin teléfono", "Male": "Masculino", "Female": "Femenino",
+}
+
+
+def _to01(v) -> int:
+    """Normaliza un valor binario (bool / int / 'Yes'/'No') a 0/1."""
+    if isinstance(v, str):
+        return 1 if v.strip().lower() in ("yes", "sí", "si", "true", "1") else 0
+    return int(bool(v))
+
+
+def _fila_cliente(datos: dict) -> pd.DataFrame:
+    """Arma la fila (1x19) del cliente: plantilla + overrides del usuario."""
+    c = {**CLIENTE_TEMPLATE, **{k: v for k, v in (datos or {}).items()
+                                if k in CLIENTE_TEMPLATE and v is not None}}
+    for b in _BIN_COLS:
+        c[b] = _to01(c[b])
+    if c.get("TotalCharges") is None:  # cargo total ~ antiguedad * cargo mensual
+        c["TotalCharges"] = round(float(c["tenure"]) * float(c["MonthlyCharges"]), 2)
+    return pd.DataFrame([c])
+
+
+def _nombre_factor(nombre: str, fila: dict) -> str:
+    """Traduce un nombre tecnico del modelo a texto legible.
+    'cat__Contract_Month-to-month' -> 'Contrato: Mes a mes'."""
+    tipo, resto = nombre.split("__", 1)
+    if tipo == "cat":
+        col, _, val = resto.partition("_")
+        return f"{_COL_ES.get(col, col)}: {_VAL_ES.get(val, val)}"
+    if tipo == "num":
+        v = fila.get(resto)
+        unidad = " meses" if resto == "tenure" else ""
+        return f"{_COL_ES.get(resto, resto)} = {v:g}{unidad}" if v is not None else _COL_ES.get(resto, resto)
+    return f"{_COL_ES.get(resto, resto)}: {'Sí' if fila.get(resto) else 'No'}"  # binaria
+
+
+def explicar_prediccion(pipe: Pipeline, X: pd.DataFrame, top: int = 4) -> dict:
+    """Descompone la prediccion de la Regresion Logistica: la contribucion de cada
+    variable al log-odds es coef * valor_transformado. Devuelve los factores que mas
+    empujan a la fuga (contrib>0) y los que retienen (contrib<0). Interpretabilidad
+    real del modelo (no inventada), sin dependencias nuevas."""
+    pre, clf = pipe.named_steps["pre"], pipe.named_steps["clf"]
+    if not hasattr(clf, "coef_"):
+        return {"empujan_a_fuga": [], "retienen": []}
+    z = np.asarray(pre.transform(X))[0]
+    nombres = pre.get_feature_names_out()
+    contrib = clf.coef_[0] * z
+    f0 = X.iloc[0].to_dict()
+    orden = np.argsort(contrib)
+    fuga = [{"factor": _nombre_factor(nombres[i], f0), "peso": round(float(contrib[i]), 3)}
+            for i in orden[::-1] if contrib[i] > 1e-6][:top]
+    ret = [{"factor": _nombre_factor(nombres[i], f0), "peso": round(float(contrib[i]), 3)}
+           for i in orden if contrib[i] < -1e-6][:2]
+    return {"empujan_a_fuga": fuga, "retienen": ret}
+
+
+def predecir_cliente_nuevo(pipe: Pipeline, datos: dict) -> dict:
+    """Predice el churn de un cliente NUEVO (no existe en la base). Sin reentrenar ni
+    persistir: prediccion efimera para el demo en vivo sobre datos que el modelo no vio."""
+    X = _features(_fila_cliente(datos))
+    proba = float(pipe.predict_proba(X)[:, 1][0])
+    nivel = "alto" if proba >= 0.5 else "medio" if proba >= 0.3 else "bajo"
+    return {
+        "probabilidad_churn": round(proba, 4),
+        "churn_predicho": proba >= 0.5,
+        "nivel_riesgo": nivel,
+        "factores": explicar_prediccion(pipe, X),
+        "modelo": MODELO_NOMBRE,
+        "nota": "Cliente no presente en la base — predicción sobre datos no vistos.",
+    }
+
+
 def persistir_predicciones(predicciones: pd.DataFrame, engine=None) -> int:
     """Refresca la tabla `predicciones` en Supabase (fuente del dashboard BI)."""
     from sqlalchemy import text

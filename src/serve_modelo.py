@@ -15,14 +15,51 @@ Arranque:  uvicorn serve_modelo:app --app-dir src --host 0.0.0.0 --port $PORT
 from __future__ import annotations
 
 import os
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 import modelo
 from carga_bd import _build_engine
 
 ROL = os.getenv("ROL", "predictor").strip().lower()
+
+
+class ClienteNuevo(BaseModel):
+    """Cliente inventado para el demo en vivo. Todos los campos son opcionales: lo que
+    no se envie se completa con una plantilla de defaults reales del dataset."""
+    gender: Optional[str] = None
+    SeniorCitizen: Optional[int] = None
+    Partner: Optional[bool] = None
+    Dependents: Optional[bool] = None
+    tenure: Optional[int] = None
+    PhoneService: Optional[bool] = None
+    MultipleLines: Optional[str] = None
+    InternetService: Optional[str] = None
+    OnlineSecurity: Optional[str] = None
+    OnlineBackup: Optional[str] = None
+    DeviceProtection: Optional[str] = None
+    TechSupport: Optional[str] = None
+    StreamingTV: Optional[str] = None
+    StreamingMovies: Optional[str] = None
+    Contract: Optional[str] = None
+    PaperlessBilling: Optional[bool] = None
+    PaymentMethod: Optional[str] = None
+    MonthlyCharges: Optional[float] = None
+    TotalCharges: Optional[float] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "Contract": "Month-to-month", "tenure": 2, "InternetService": "Fiber optic",
+                "PaymentMethod": "Electronic check", "TechSupport": "No",
+                "OnlineSecurity": "No", "MonthlyCharges": 95.0, "SeniorCitizen": 1,
+                "PaperlessBilling": True, "Partner": False, "Dependents": False,
+            }
+        }
+    }
 app = FastAPI(
     title=f"Telco Churn — Modelo ({ROL})",
     description=("Microservicio de **entrenamiento**" if ROL == "trainer"
@@ -39,7 +76,8 @@ def raiz():
         "descripcion": ("Entrena el modelo y lo guarda en Supabase" if ROL == "trainer"
                         else "Carga el modelo desde Supabase y predice (sin re-entrenar)"),
         "endpoints": (["POST /train"] if ROL == "trainer"
-                      else ["GET /metrics", "GET /predict/cliente/{customer_id}", "POST /predict/batch"]),
+                      else ["GET /metrics", "GET /predict/cliente/{customer_id}",
+                            "POST /predict/batch", "POST /predict/nuevo"]),
     }
 
 
@@ -103,6 +141,18 @@ else:
                     "mensaje": "Tabla `predicciones` actualizada (fuente del dashboard)."}
         except Exception as exc:
             raise HTTPException(503, f"No se pudo predecir en lote: {exc}")
+
+    @app.post("/predict/nuevo")
+    def predict_nuevo(cliente: ClienteNuevo):
+        """Predice el riesgo de churn de un cliente NUEVO (inventado, que NO esta en la
+        base y el modelo nunca vio). Reutiliza el pipeline entrenado (preprocesamiento +
+        LogReg). Devuelve la probabilidad, el nivel de riesgo y los factores que explican
+        la prediccion (interpretabilidad). No persiste nada: prediccion efimera de demo."""
+        try:
+            pipe, _ = _modelo()
+            return modelo.predecir_cliente_nuevo(pipe, cliente.model_dump(exclude_none=True))
+        except Exception as exc:
+            raise HTTPException(503, f"No se pudo predecir el cliente nuevo: {exc}")
 
     @app.post("/reload")
     def reload_model():
