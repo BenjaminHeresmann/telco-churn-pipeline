@@ -97,16 +97,18 @@ Respuesta con **plan claro y realista** (no solo enumerar):
 
 ---
 
-## 8. Guión sugerido de presentación (15 min, 2 personas)
+## 8. Guión sugerido de presentación (15 min, 2 personas, deck de 12 láminas)
 
-| Min | Láminas | Quién | Contenido |
+| Min | Láminas | Quién | Contenido (indicador que cubre) |
 |---|---|---|---|
-| 0–2 | 1–3 | A | Portada, pipeline (Fase 1), reto de negocio |
-| 2–5 | 4–7 | B | Datos, diseño del modelo, comparación, métricas |
-| 5–7 | 8–9 | A | Overfitting, seguridad y gobernanza |
-| 7–9 | 10–11 | B | Rendimiento, integración BI |
-| 9–12 | — | A+B | **DEMO**: vaciar → entrenar → predecir → dashboard → cliente nuevo (84% vs 1,4%) |
-| 12–14 | 12–14 | B | Infraestructura, monitoreo, despliegue (lo nuevo EFT) |
-| 14–15 | 15 | A | Limitaciones, mejoras, cierre |
+| 0–2 | 1–2 | A | Portada · pipeline Fase 1 + **DataOps vs tradicional** (#4, #7) |
+| 2–4 | 3–4 | A | Reto de negocio (#4) · comparación de modelos (#8) — decir verbal: partición 70/30 estratificada y `class_weight='balanced'` |
+| 4–6 | 5–6 | B | Métricas e interpretación (#8) · hallazgo overfitting (#6) |
+| 6–7 | 7 | B | Seguridad y gobernanza: ley + técnicas (#5, #9) |
+| 7–10 | 8 | A+B | **DEMO** (instrucción B.c): vaciar → entrenar → predecir → dashboard → cliente nuevo (84% vs 1,4%) |
+| 10–13 | 9–11 | B | Infraestructura · monitoreo · despliegue (criterios D del EFT) — decir verbal en infra: el benchmark ~219× justifica "misma región" |
+| 13–15 | 12 | A | Limitaciones, mejoras y cierre (#6, #10) |
+
+> Recortado a 12 láminas: se quitaron Análisis de datos, Diseño del modelo y Rendimiento en la nube (no exigidas explícitamente). Su contenido se dice **verbalmente** donde se indica arriba — sigue siendo materia de preguntas.
 
 **Checklist pre-defensa:** servicios despiertos (`/health` de los 3 + dashboard), deck en Vercel carga, `checklist_defensa.md` de la Ev3 sigue vigente.
