@@ -9,7 +9,7 @@ Cada lámina tiene: 🧠 el concepto (la teoría), 📖 la historia en nuestro s
 
 **⚓ Ancla:** *"Anticipamos qué clientes se van, antes de que se vayan."*
 
-**🧠 El concepto.** El proyecto completo es un ciclo de vida del dato: dato crudo → pipeline → base de datos → modelo → predicciones → dashboard → decisión de negocio. La portada presenta ese sistema, no una tarea de curso. El stack (GitHub · Railway · Supabase · Streamlit) no es decorado: cada logo es una capa con una responsabilidad (código+CI, cómputo, datos, visualización).
+**🧠 El concepto.** El proyecto completo es un ciclo de vida del dato: dato crudo → pipeline → base de datos → modelo → predicciones → dashboard → decisión de negocio. La portada presenta ese sistema, no una tarea de curso. El kicker dice **"Evaluación Final Transversal"** y el subtítulo ya anuncia el alcance EFT (rendimiento, seguridad, infraestructura, monitoreo y despliegue). El stack (GitHub · Railway · Supabase · Streamlit) no es decorado: cada logo es una capa con una responsabilidad (código+CI, cómputo, datos, visualización).
 
 **📖 La historia.** Partimos en la Evaluación 1 con un caso IoT y pivotamos a Telco Churn porque tenía un dataset real (7.043 clientes), una variable objetivo clara (`Churn`) y un problema de negocio medible. Desde la Ev2 todo se construyó con la misma filosofía: **desacoplado, reproducible y auditable**. Roles del equipo: Benjamín como Ingeniero de Datos, Diego como Ingeniero de BD/DataOps — pero ambos dominan todo (el profe puede preguntarle cualquier parte a cualquiera).
 
@@ -41,7 +41,7 @@ Cada lámina tiene: 🧠 el concepto (la teoría), 📖 la historia en nuestro s
 
 **⚓ Ancla:** *"El error caro no es la falsa alarma: es el cliente que se fue sin que nadie lo llamara."*
 
-**🧠 El concepto.** Churn = tasa de abandono. Es un problema de **clasificación binaria supervisada**: tenemos la respuesta histórica (quién se fue) y queremos anticipar la futura. El insight clave del negocio: **retener cuesta menos que captar** (un incentivo vs marketing + comisión + onboarding). Y el insight técnico que define TODO el proyecto: la clase está **desbalanceada** (26,5% churn / 73,5% no churn), y eso determina qué métrica importa y cómo entrenar.
+**🧠 El concepto.** Churn = tasa de abandono. Es un problema de **clasificación binaria supervisada**: tenemos la respuesta histórica (quién se fue) y queremos anticipar la futura. El insight clave del negocio — y ahora está **escrito en la lámina**: **retener cuesta 5–7× menos que captar** (un incentivo vs marketing + comisión + onboarding). Y el insight técnico que define TODO el proyecto: la clase está **desbalanceada** (26,5% churn / 73,5% no churn), y eso determina qué métrica importa y cómo entrenar.
 
 **📖 La historia.** 7.043 clientes: 1.869 abandonan, 5.174 permanecen. Cuando hicimos el análisis bivariado, los factores de riesgo saltaron a la vista: contrato **mes a mes** (42,7% churn vs 2,8% en contrato de 2 años), **fibra óptica** (41,9% — probablemente por precio/competencia), **cheque electrónico** como pago (45,3%), y sobre todo **antigüedad baja** (0-12 meses: 47,4% — casi la mitad del primer año se va). Estos números no van en el deck recortado, pero los dices tú — y reaparecen solos en la demo del cliente nuevo, cuando el modelo explica "por qué".
 
@@ -107,7 +107,7 @@ De ahí salen todas las métricas: **Recall** = TP/(TP+FN) = 447/561 = **79,7%**
 
 **📖 La historia.** El escaneo de secretos no fue teatro: cada commit del proyecto pasó por revisión antes de subir. Y los 10 CVEs los encontramos nosotros con pip-audit (starlette, python-dotenv, pytest) — mostrarlos con plan de actualización vale más que decir "no hay vulnerabilidades" (nadie te lo cree).
 
-**🎤 Para explayarte:** pregunta trampa habitual: *"¿cifran los datos?"* → *"En tránsito sí: TLS en toda la cadena (API, BD, dashboard). En reposo, Supabase cifra el storage subyacente. Y el dato más sensible que NO ciframos… no existe: minimizamos — no guardamos nombre ni RUT."* Pregunta ARCO: *"un cliente pide borrar sus datos"* → *"DELETE por customer_id en clientes y predicciones; el diseño indexado lo hace trivial. Y el modelo no memoriza individuos: es un modelo lineal de patrones agregados."*
+**🎤 Para explayarte:** pregunta trampa habitual: *"¿cifran los datos?"* → *"En tránsito sí: TLS en toda la cadena (API, BD, dashboard) — está en el pie de la lámina: 'Cifrado TLS en tránsito'. En reposo, Supabase cifra el storage subyacente. Y el dato más sensible que NO ciframos… no existe: minimizamos — no guardamos nombre ni RUT."* Pregunta ARCO: *"un cliente pide borrar sus datos"* → *"DELETE por customer_id en clientes y predicciones; el diseño indexado lo hace trivial. Y el modelo no memoriza individuos: es un modelo lineal de patrones agregados."*
 
 ---
 
