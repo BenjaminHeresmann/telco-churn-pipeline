@@ -1,0 +1,179 @@
+<!doctype html><html lang='es'><head><meta charset='utf-8'><title>Guia Estudio EFT</title><style>
+@page { size: Letter; margin: 18mm 16mm; }
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.5pt; line-height: 1.5;
+       color: #1a2433; max-width: 100%; margin: 0; }
+h1 { font-size: 19pt; color: #1F4E79; border-bottom: 3px solid #1F4E79; padding-bottom: 6px; margin: 0 0 14px; }
+h2 { font-size: 14pt; color: #1F4E79; margin: 22px 0 8px; border-bottom: 1px solid #d7e0ec; padding-bottom: 4px;
+     page-break-after: avoid; }
+h3 { font-size: 11.5pt; color: #2E75B6; margin: 16px 0 6px; page-break-after: avoid; }
+p { margin: 6px 0; text-align: justify; }
+strong { color: #10233f; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 9.5pt; page-break-inside: avoid; }
+th { background: #1F4E79; color: #fff; padding: 6px 8px; text-align: left; }
+td { border: 1px solid #c9d4e2; padding: 5px 8px; vertical-align: top; }
+tr:nth-child(even) td { background: #f4f7fb; }
+code { font-family: Consolas, monospace; font-size: 9pt; background: #eef2f8; color: #1B47B8;
+       padding: 1px 4px; border-radius: 3px; }
+blockquote { border-left: 4px solid #2E75B6; background: #f0f5fb; margin: 10px 0; padding: 8px 14px;
+             color: #33465e; }
+ul, ol { margin: 6px 0; padding-left: 22px; }
+li { margin: 3px 0; }
+hr { border: none; border-top: 1px solid #d7e0ec; margin: 18px 0; }
+a { color: #1B47B8; text-decoration: none; }
+.footer-note { color: #8a99ad; font-size: 8.5pt; margin-top: 24px; border-top: 1px solid #d7e0ec; padding-top: 6px; }
+</style></head><body><h1>Guía de Estudio — Examen Final Transversal (EFT)</h1>
+<p><strong>ITY1101 Gestión de Datos para IA · Entrega/defensa: 13-07-2026 · 40% del ramo</strong></p>
+<blockquote>
+<p>Complementa la <a href="Guia_Estudio_Defensa_Ev3.md">Guía de la Ev3</a> (modelo, métricas, seguridad, demo).
+Esta guía cubre <strong>lo nuevo del EFT</strong>: infraestructura, monitoreo, gobernanza, despliegue y PMBOK.</p>
+</blockquote>
+<hr />
+<h2>1. Cómo se gana la nota</h2>
+<table>
+<thead>
+<tr>
+<th>Componente</th>
+<th>Peso</th>
+<th>Dónde está</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Encargo (informe)</td>
+<td>15% grupal</td>
+<td><code>docs/Informe_EFT.pdf</code> (12 págs) ✅</td>
+</tr>
+<tr>
+<td>Presentación + demo</td>
+<td>15% grupal</td>
+<td>Deck 15 láminas + demo en vivo ✅</td>
+</tr>
+<tr>
+<td><strong>Preguntas individuales</strong></td>
+<td><strong>70%</strong></td>
+<td><strong>Esta guía + la de Ev3</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Indicadores que más pesan en preguntas: <strong>#7 procesos DataOps (20%) · #8 métricas (20%) · #9 seguridad/ley (20%) · #10 implementar mejoras (10%)</strong>. Los tres primeros ya los dominan (guía Ev3); el #10 y los temas EFT están abajo.</p>
+<hr />
+<h2>2. Requerimiento de infraestructura (slide 12 · informe §5)</h2>
+<p><strong>Discurso de 30 segundos:</strong> <em>"Dimensionamos la infraestructura con mediciones reales, no supuestos: el sistema completo usa ~200 MB de RAM y 10% de CPU para 7.043 registros, así que en producción pedimos 1–2 vCPU y 2–4 GB por servicio —margen de 10×—. Elegimos nube porque el costo inicial es cero, el cómputo es elástico (entrenar toma segundos, no justifica hardware dedicado) y los servicios gestionados incluyen backups y TLS. Ya operamos 100% en nube, la decisión está validada."</em></p>
+<p><strong>Preguntas probables:</strong></p>
+<ul>
+<li><strong>¿Por qué nube y no on-premise?</strong> → Costo inicial cero, elasticidad, servicios gestionados. On-premise solo se justificaría por una política estricta de soberanía de datos; la Ley 21.719 no lo exige si se cumplen sus garantías.</li>
+<li><strong>¿Cómo escala si los datos se multiplican por 100?</strong> → El predictor es <em>stateless</em> (el modelo vive en la BD): se replica horizontalmente tras un balanceador. El pipeline procesa por lotes: se particiona la carga. Para millones de registros, sumar un orquestador (Airflow) manteniendo la misma lógica por etapas.</li>
+<li><strong>¿Dónde está la redundancia?</strong> → El único punto único de fallo real es la BD → réplica de lectura + backups diarios verificados. Los servicios tienen health checks + reinicio automático; ≥2 réplicas del predictor dan 99,9% de disponibilidad.</li>
+<li><strong>¿Qué dependencia es crítica fijar y por qué?</strong> → <code>scikit-learn 1.9</code>: el modelo serializado exige la <strong>misma versión</strong> al deserializar. (Lo vivimos: un numpy sin fijar nos tumbó el dashboard con un segfault — por eso todo va pinneado.)</li>
+<li><strong>¿Por qué misma región para servicios y BD?</strong> → Nuestro benchmark mostró que la <strong>red domina</strong> (~219× más lenta que local): colocalizar reduce el cuello de botella real.</li>
+</ul>
+<hr />
+<h2>3. Estrategia de monitoreo (slide 13 · informe §6)</h2>
+<p><strong>Discurso de 30 segundos:</strong> <em>"Monitoreamos en tres planos. Infraestructura: ¿está viva la solución? — health checks con reinicio automático hoy, Prometheus+Grafana con alertas propuesto. Datos: ¿el pipeline procesa bien? — carga_logs audita cada corrida hoy, alerta si los rechazados superan el 5% propuesto. Y modelo: ¿sigue prediciendo bien? — métricas versionadas con el artefacto hoy, monitoreo de deriva y recall mensual propuesto. El plano del modelo es el más importante: un modelo degradado falla en silencio."</em></p>
+<p><strong>Preguntas probables:</strong></p>
+<ul>
+<li><strong>¿Qué es la deriva (drift) y cómo la detectas?</strong> → Los datos de producción dejan de parecerse a los de entrenamiento (ej.: cambia el mix de contratos tras una promoción). Se detecta comparando distribuciones por variable (PSI) y midiendo el recall sobre churn real observado cada mes. Si recall &lt; 70% → re-entrenar.</li>
+<li><strong>¿Qué alertas configurarías?</strong> → Infra: latencia p95 &gt; 2 s o errores 5xx &gt; 1% → Slack. Datos: rechazados &gt; 5% o duración &gt; 2× histórico. Modelo: PSI alto o recall &lt; umbral → disparar re-entrenamiento.</li>
+<li><strong>¿Y Jenkins?</strong> → Su rol (CI) lo cubre <strong>GitHub Actions</strong>: pytest corre en cada push. Prometheus/Grafana quedan propuestos porque su valor aparece con operación 24/7.</li>
+<li><strong>¿Qué monitoreo ya funciona hoy en tu demo?</strong> → <code>/health</code> en cada microservicio (Railway lo usa para reiniciar ante fallo), <code>carga_logs</code> con leídos/rechazados/duración por corrida, y el dashboard se auto-refresca reflejando el estado real de la BD cada 3 s.</li>
+</ul>
+<hr />
+<h2>4. Seguridad y <strong>gobernanza</strong> (slide 9 · informe §7)</h2>
+<p>Seguridad ya la dominan (guía Ev3). Lo nuevo es <strong>gobernanza</strong> — la diferencia conceptual:</p>
+<blockquote>
+<p><strong>Seguridad</strong> = proteger los datos (RLS, TLS, secretos, privilegio mínimo).
+<strong>Gobernanza</strong> = gestionar los datos como activo: quién accede a qué (políticas por rol), de dónde viene cada dato (linaje raw→clean→validated→BD), qué modelo estaba en producción y cuándo (versionado en <code>modelo_artefacto</code>), cómo se ejercen los derechos del titular (ARCO por <code>customer_id</code>), y qué riesgos hay y cómo se mitigan (matriz).</p>
+</blockquote>
+<p><strong>Preguntas probables:</strong></p>
+<ul>
+<li><strong>¿Cómo garantizas trazabilidad/linaje?</strong> → Zonas del pipeline con timestamp por corrida + <code>carga_logs</code> + git. Puedo reconstruir el camino de cualquier registro desde el CSV crudo hasta la predicción.</li>
+<li><strong>¿Cómo respondes a un cliente que pide borrar sus datos (ARCO)?</strong> → Todo está indexado por <code>customer_id</code>: se localiza y elimina/rectifica en <code>clientes</code> y <code>predicciones</code>. La minimización ayuda: no guardamos nombre ni RUT.</li>
+<li><strong>¿Quién puede ver las predicciones?</strong> → Separación de funciones: el pipeline (dueño) escribe; BI consume con rol de <strong>solo lectura</strong> (<code>telco_lectura</code>); <code>anon</code> está bloqueado por RLS.</li>
+</ul>
+<hr />
+<h2>5. Estrategia de despliegue organizacional (slide 14 · informe §8)</h2>
+<p><strong>Discurso de 30 segundos:</strong> <em>"Proponemos adopción progresiva en 4 fases para minimizar impacto: piloto con el equipo de retención usando el dashboard contra un grupo control; integración al CRM vía API —la ficha del cliente consulta <code>/predict/nuevo</code> y muestra riesgo y factores en vivo—; automatización del scoring semanal alimentando campañas; y operación continua con re-entrenamiento y monitoreo de deriva. Cada fase tiene criterio de avance medible, y el rollback es inmediato porque el modelo queda versionado en la BD."</em></p>
+<p><strong>Preguntas probables:</strong></p>
+<ul>
+<li><strong>¿Cómo se integra con los sistemas existentes?</strong> → La <strong>API REST es el contrato</strong>: el CRM consume <code>POST /predict/nuevo</code> (predicción al vuelo, con factores explicativos para el ejecutivo en llamada); el batch semanal actualiza <code>predicciones</code> para los tableros. No se toca el core del CRM.</li>
+<li><strong>¿Y la migración de datos?</strong> → Solo cambia la <strong>etapa de ingesta</strong> (de CSV a la fuente transaccional); limpieza, validación y carga quedan igual — esa es la gracia del diseño por etapas.</li>
+<li><strong>¿Capacitación?</strong> → Por rol: ejecutivos (leer dashboard + el "porqué" de cada predicción), analistas (interpretar métricas), TI (operación y alertas).</li>
+<li><strong>¿Qué pasa si el modelo nuevo es peor?</strong> → <em>Rollback</em> inmediato: <code>modelo_artefacto</code> conserva versión, métricas y fecha; el predictor recarga el anterior con <code>/reload</code>.</li>
+<li><strong>¿Beneficio concreto?</strong> → Con recall 79,7%, de cada 100 fugas anticipamos ~80. Retener incluso una fracción paga con holgura la operación (la infra es de bajo costo).</li>
+</ul>
+<hr />
+<h2>6. Metodología PMBOK y plan de gestión (informe §2 — indicadores 1 y 2)</h2>
+<p><strong>Respuesta modelo:</strong> <em>"Usamos </em><em>PMBOK híbrido</em><em>: ciclo predictivo para la estructura —alcance y hitos estaban fijos (las evaluaciones)— y desarrollo adaptativo en sprints semanales dentro de cada fase, porque los requisitos evolucionaron con el feedback del docente: tras la Parcial 2 desacoplamos el monolito en microservicios; en la Parcial 3 separamos entrenamiento de inferencia. Ejemplo concreto: el hito 'Parcial 3' fijaba el entregable, pero el cómo se iteró — baseline → balanceado → serving. Aplicamos los 5 grupos de procesos: inicio (caso de negocio del churn), planificación (EDT por fases + matriz de riesgos), ejecución (sprints + commits descriptivos), monitoreo y control (CI con pytest + revisión del docente por parcial), cierre (este EFT). GitHub fue la herramienta de gestión —commits documentan sprints, releases los hitos—; en una organización escalaríamos a Jira."</em></p>
+<p><strong>Riesgos gestionados (si piden ejemplos):</strong> suspensión del free tier (mitigación: verificación pre-demo), sobreajuste (holdout estratificado), fuga de credenciales (.env + escaneo del historial).</p>
+<hr />
+<h2>7. Indicador 10: "¿Cómo implementarías las mejoras?" (10%)</h2>
+<p>Respuesta con <strong>plan claro y realista</strong> (no solo enumerar):</p>
+<ol>
+<li><strong>Ajuste del umbral de decisión</strong> (1 día): barrido del umbral sobre el holdout optimizando F1 o costo de negocio; sube precisión sin reentrenar. <em>Primera porque es la de mayor impacto/costo.</em></li>
+<li><strong>Validación cruzada k-fold</strong> (1 día): <code>cross_val_score</code> (k=5) en el modo <code>--eval</code>; da intervalos de confianza de las métricas con dataset pequeño.</li>
+<li><strong>Regularizar el Random Forest</strong> (2 días): búsqueda de hiperparámetros (<code>max_depth</code>, <code>min_samples_leaf</code>) con CV; cierra la brecha train/test.</li>
+<li><strong>Actualizar dependencias con CVEs</strong> (1 día): python-dotenv inmediato; FastAPI/starlette coordinado con re-test de la API.</li>
+<li><strong>Monitoreo de deriva</strong> (1 semana): job mensual que calcula PSI y recall contra churn observado; alerta y re-entrena.</li>
+</ol>
+<p><em>Nota honesta que suma puntos:</em> varias mejoras propuestas en parciales <strong>ya las implementamos</strong>: microservicios train/predict separados, rol de solo lectura, y predicción de clientes nunca vistos con factores explicativos (<code>/predict/nuevo</code>).</p>
+<hr />
+<h2>8. Guión sugerido de presentación (15 min, 2 personas, deck de 12 láminas)</h2>
+<table>
+<thead>
+<tr>
+<th>Min</th>
+<th>Láminas</th>
+<th>Quién</th>
+<th>Contenido (indicador que cubre)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0–2</td>
+<td>1–2</td>
+<td>A</td>
+<td>Portada · pipeline Fase 1 + <strong>DataOps vs tradicional</strong> (#4, #7)</td>
+</tr>
+<tr>
+<td>2–4</td>
+<td>3–4</td>
+<td>A</td>
+<td>Reto de negocio (#4) · comparación de modelos (#8) — decir verbal: partición 70/30 estratificada y <code>class_weight='balanced'</code></td>
+</tr>
+<tr>
+<td>4–6</td>
+<td>5–6</td>
+<td>B</td>
+<td>Métricas e interpretación (#8) · hallazgo overfitting (#6)</td>
+</tr>
+<tr>
+<td>6–7</td>
+<td>7</td>
+<td>B</td>
+<td>Seguridad y gobernanza: ley + técnicas (#5, #9)</td>
+</tr>
+<tr>
+<td>7–10</td>
+<td>8</td>
+<td>A+B</td>
+<td><strong>DEMO</strong> (instrucción B.c): vaciar → entrenar → predecir → dashboard → cliente nuevo (84% vs 1,4%)</td>
+</tr>
+<tr>
+<td>10–13</td>
+<td>9–11</td>
+<td>B</td>
+<td>Infraestructura · monitoreo · despliegue (criterios D del EFT) — decir verbal en infra: el benchmark ~219× justifica "misma región"</td>
+</tr>
+<tr>
+<td>13–15</td>
+<td>12</td>
+<td>A</td>
+<td>Limitaciones, mejoras y cierre (#6, #10)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Recortado a 12 láminas: se quitaron Análisis de datos, Diseño del modelo y Rendimiento en la nube (no exigidas explícitamente). Su contenido se dice <strong>verbalmente</strong> donde se indica arriba — sigue siendo materia de preguntas.</p>
+</blockquote>
+<p><strong>Checklist pre-defensa:</strong> servicios despiertos (<code>/health</code> de los 3 + dashboard), deck en Vercel carga, <code>checklist_defensa.md</code> de la Ev3 sigue vigente.</p><p class='footer-note'>Proyecto Telco Churn · ITY1101 Duoc UC · Benjamín Heresmann &amp; Diego Hernández</p></body></html>

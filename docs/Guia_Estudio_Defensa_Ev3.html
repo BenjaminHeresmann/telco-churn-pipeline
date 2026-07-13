@@ -1,17 +1,27 @@
-<!DOCTYPE html><html><head><meta charset='utf-8'><style>
-body{font-family:'Calibri','Arial',sans-serif;font-size:11pt;line-height:1.5;color:#1a1a2e;margin:2.2cm 2cm;}
-h1{color:#1F4E79;font-size:24pt;border-bottom:3px solid #1F4E79;padding-bottom:6px;}
-h2{color:#1F4E79;font-size:17pt;border-bottom:1px solid #bcd;padding-bottom:4px;margin-top:22px;}
-h3{color:#2E75B6;font-size:13pt;margin-top:16px;} h4{color:#2E75B6;font-size:11.5pt;}
-table{border-collapse:collapse;width:100%;margin:10px 0;font-size:10pt;}
-th{background:#1F4E79;color:#fff;padding:6px 9px;text-align:left;border:1px solid #1F4E79;}
-td{padding:5px 9px;border:1px solid #cdd6e0;vertical-align:top;}
-tr:nth-child(even) td{background:#f4f7fb;}
-code{font-family:'Consolas',monospace;background:#eef2f7;color:#b3216a;padding:1px 4px;border-radius:3px;font-size:9.5pt;}
-pre{background:#0f2440;color:#e8eefc;padding:10px 12px;border-radius:6px;font-size:9pt;}
-pre code{background:none;color:#e8eefc;padding:0;}
-blockquote{background:#fff8e1;border-left:4px solid #f5b301;margin:10px 0;padding:8px 14px;}
-a{color:#2E75B6;text-decoration:none;} hr{border:none;border-top:1px solid #d0d7de;margin:18px 0;}
+<!doctype html><html lang='es'><head><meta charset='utf-8'><title>Guia Estudio Defensa Ev3</title><style>
+@page { size: Letter; margin: 18mm 16mm; }
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.5pt; line-height: 1.5;
+       color: #1a2433; max-width: 100%; margin: 0; }
+h1 { font-size: 19pt; color: #1F4E79; border-bottom: 3px solid #1F4E79; padding-bottom: 6px; margin: 0 0 14px; }
+h2 { font-size: 14pt; color: #1F4E79; margin: 22px 0 8px; border-bottom: 1px solid #d7e0ec; padding-bottom: 4px;
+     page-break-after: avoid; }
+h3 { font-size: 11.5pt; color: #2E75B6; margin: 16px 0 6px; page-break-after: avoid; }
+p { margin: 6px 0; text-align: justify; }
+strong { color: #10233f; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 9.5pt; page-break-inside: avoid; }
+th { background: #1F4E79; color: #fff; padding: 6px 8px; text-align: left; }
+td { border: 1px solid #c9d4e2; padding: 5px 8px; vertical-align: top; }
+tr:nth-child(even) td { background: #f4f7fb; }
+code { font-family: Consolas, monospace; font-size: 9pt; background: #eef2f8; color: #1B47B8;
+       padding: 1px 4px; border-radius: 3px; }
+blockquote { border-left: 4px solid #2E75B6; background: #f0f5fb; margin: 10px 0; padding: 8px 14px;
+             color: #33465e; }
+ul, ol { margin: 6px 0; padding-left: 22px; }
+li { margin: 3px 0; }
+hr { border: none; border-top: 1px solid #d7e0ec; margin: 18px 0; }
+a { color: #1B47B8; text-decoration: none; }
+.footer-note { color: #8a99ad; font-size: 8.5pt; margin-top: 24px; border-top: 1px solid #d7e0ec; padding-top: 6px; }
 </style></head><body><h1>📚 Guía de Estudio — Defensa Evaluación 3</h1>
 <p><strong>Asignatura:</strong> ITY1101 Gestión de Datos para IA · Duoc UC  ·  <strong>Caso:</strong> Telco Customer Churn
 <strong>Equipo:</strong> Benjamín Heresmann · Diego Hernández</p>
@@ -1436,4 +1446,4 @@ LEFT JOIN clientes c ON p.customer_id = c.customer_id
 <blockquote>
 <p>💡 <strong>Para la defensa (cierre de toda la sección):</strong> tres reglas para la oral. (1) <strong>Siempre con el número real</strong> — no digan "buen recall", digan "<strong>recall 79,7%, detecta 447 de 561</strong>". (2) <strong>No leer las slides</strong> — la rúbrica penaliza leer; el apoyo visual complementa, no se recita. (3) <strong>Conecten dato con decisión</strong> — toda métrica termina en una acción de negocio: "detectamos al cliente en riesgo → el equipo de retención lo llama antes de que se vaya". Eso es lo que separa el 100% ("justifica con claridad y precisión") del 60% ("explicaciones confusas o incompletas").</p>
 </blockquote>
-<p><strong>Archivos fuente leídos:</strong> <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\EV FORMATIVA.pdf</code> (las 10 preguntas del quiz), <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\EV PARCIAL 3_ITY1101_ESTUDIANTE.pdf</code> (rúbrica: indicadores 8=30%, 9=30%, 10=10%), <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\outputs\guion_defensa.md</code> (preguntas anticipadas y números del proyecto).</p></body></html>
+<p><strong>Archivos fuente leídos:</strong> <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\EV FORMATIVA.pdf</code> (las 10 preguntas del quiz), <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\EV3\EV PARCIAL 3_ITY1101_ESTUDIANTE.pdf</code> (rúbrica: indicadores 8=30%, 9=30%, 10=10%), <code>C:\Users\USER\Desktop\PROYECTO GESTION DATOS IA\telco-churn-pipeline\outputs\guion_defensa.md</code> (preguntas anticipadas y números del proyecto).</p><p class='footer-note'>Proyecto Telco Churn · ITY1101 Duoc UC · Benjamín Heresmann &amp; Diego Hernández</p></body></html>
